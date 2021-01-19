@@ -11,6 +11,7 @@ import net.minecraft.entity.EntityLivingBase
 import net.minecraft.entity.item.EntityItem
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.init.Blocks
+import net.minecraft.inventory.EntityEquipmentSlot
 import net.minecraft.item.EnumRarity
 import net.minecraft.item.ItemArmor
 import net.minecraft.item.ItemStack
@@ -20,12 +21,12 @@ import net.minecraft.world.World
 import net.minecraftforge.fml.relauncher.Side
 import net.minecraftforge.fml.relauncher.SideOnly
 
-class HoverBoots extends ItemArmor(ItemArmor.ArmorMaterial.DIAMOND, 0, 3) with traits.SimpleItem with traits.Chargeable {
+class HoverBoots extends ItemArmor(ItemArmor.ArmorMaterial.DIAMOND, 0, EntityEquipmentSlot.FEET) with traits.SimpleItem with traits.Chargeable {
   setNoRepair()
 
   override def getRarity(stack: ItemStack): EnumRarity = EnumRarity.UNCOMMON
 
-  override def maxCharge(stack: ItemStack) = Settings.get.bufferHoverBoots
+  override def maxCharge(stack: ItemStack): Double = Settings.get.bufferHoverBoots
 
   override def getCharge(stack: ItemStack): Double =
     new HoverBootsData(stack).charge
@@ -40,75 +41,47 @@ class HoverBoots extends ItemArmor(ItemArmor.ArmorMaterial.DIAMOND, 0, 3) with t
 
   override def charge(stack: ItemStack, amount: Double, simulate: Boolean): Double = {
     val data = new HoverBootsData(stack)
-    if (amount < 0) {
-      val remainder = math.min(0, data.charge + amount)
-      if (!simulate) {
-        data.charge = math.max(0, data.charge + amount)
-        data.save(stack)
-      }
-      remainder
-    }
-    else {
-      val remainder = -math.min(0, Settings.get.bufferHoverBoots - (data.charge + amount))
-      if (!simulate) {
-        data.charge = math.min(Settings.get.bufferHoverBoots, data.charge + amount)
-        data.save(stack)
-      }
-      remainder
-    }
+    traits.Chargeable.applyCharge(amount, data.charge, Settings.get.bufferHoverBoots, used => if (!simulate) {
+      data.charge += used
+      data.save(stack)
+    })
   }
 
   @SideOnly(Side.CLIENT)
-  override def getArmorModel(entityLiving: EntityLivingBase, itemStack: ItemStack, armorSlot: Int): ModelBiped = {
-    if (armorSlot == 4 - armorType) {
-      HoverBootRenderer.lightColor = if (ItemColorizer.hasColor(itemStack)) ItemColorizer.getColor(itemStack) else 0x66DD55
-      HoverBootRenderer
-    }
-    else super.getArmorModel(entityLiving, itemStack, armorSlot)
-  }
-
-  @SideOnly(Side.CLIENT)
-  override def getArmorModel(entityLiving: EntityLivingBase, itemStack: ItemStack, armorSlot: Int, _default: ModelBiped): ModelBiped = {
-    if (armorSlot == 4 - armorType) {
+  override def getArmorModel(entityLiving: EntityLivingBase, itemStack: ItemStack, armorSlot: EntityEquipmentSlot, _default: ModelBiped): ModelBiped = {
+    if (armorSlot == armorType) {
       HoverBootRenderer.lightColor = if (ItemColorizer.hasColor(itemStack)) ItemColorizer.getColor(itemStack) else 0x66DD55
       HoverBootRenderer
     }
     else super.getArmorModel(entityLiving, itemStack, armorSlot, _default)
   }
 
-  override def getArmorTexture(stack: ItemStack, entity: Entity, slot: Int, subType: String): String = {
-    if (entity.worldObj.isRemote) HoverBootRenderer.texture.toString
+  override def getArmorTexture(stack: ItemStack, entity: Entity, slot: EntityEquipmentSlot, subType: String): String = {
+    if (entity.world.isRemote) HoverBootRenderer.texture.toString
     else null
   }
 
   override def onArmorTick(world: World, player: EntityPlayer, stack: ItemStack): Unit = {
     super.onArmorTick(world, player, stack)
-    if (!Settings.get.ignorePower && player.getActivePotionEffect(Potion.moveSlowdown) == null && getCharge(stack) == 0) {
-      player.addPotionEffect(new PotionEffect(Potion.moveSlowdown.getId, 20, 1))
+    if (!Settings.get.ignorePower && player.getActivePotionEffect(Potion.getPotionFromResourceLocation("slowness")) == null && getCharge(stack) == 0) {
+      player.addPotionEffect(new PotionEffect(Potion.getPotionFromResourceLocation("slowness"), 20, 1))
     }
   }
 
   override def onEntityItemUpdate(entity: EntityItem): Boolean = {
-    if (entity != null && entity.worldObj != null && !entity.worldObj.isRemote && ItemColorizer.hasColor(entity.getEntityItem)) {
+    if (entity != null && entity.world != null && !entity.world.isRemote && ItemColorizer.hasColor(entity.getItem)) {
       val pos = entity.getPosition
-      val state = entity.worldObj.getBlockState(pos)
-      if (state.getBlock == Blocks.cauldron) {
+      val state = entity.world.getBlockState(pos)
+      if (state.getBlock == Blocks.CAULDRON) {
         val level = state.getValue(BlockCauldron.LEVEL).toInt
         if (level > 0) {
-          ItemColorizer.removeColor(entity.getEntityItem)
-          entity.worldObj.setBlockState(pos, state.withProperty(BlockCauldron.LEVEL, Int.box(level - 1)), 3)
+          ItemColorizer.removeColor(entity.getItem)
+          entity.world.setBlockState(pos, state.withProperty(BlockCauldron.LEVEL, Int.box(level - 1)), 3)
           return true
         }
       }
     }
     super.onEntityItemUpdate(entity)
-  }
-
-  override def getColorFromItemStack(itemStack: ItemStack, pass: Int): Int = {
-    if (pass == 1) {
-      return if (ItemColorizer.hasColor(itemStack)) ItemColorizer.getColor(itemStack) else 0x66DD55
-    }
-    super.getColorFromItemStack(itemStack, pass)
   }
 
   override def showDurabilityBar(stack: ItemStack): Boolean = true

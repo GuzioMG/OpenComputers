@@ -70,14 +70,12 @@ function require(module)
 end
 
 function package.delay(lib, file)
-  local mt = {
-    __index = function(tbl, key)
-      dofile(file)
-      setmetatable(lib, nil)
-      setmetatable(lib.internal or {}, nil)
-      return tbl[key]
-    end
-  }
+  local mt = {}
+  function mt.__index(tbl, key)
+    mt.__index = nil
+    dofile(file)
+    return tbl[key]
+  end
   if lib.internal then
     setmetatable(lib.internal, mt)
   end

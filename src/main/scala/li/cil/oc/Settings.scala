@@ -12,7 +12,6 @@ import com.mojang.authlib.GameProfile
 import com.typesafe.config._
 import li.cil.oc.Settings.DebugCardAccess
 import li.cil.oc.common.Tier
-import li.cil.oc.integration.Mods
 import li.cil.oc.server.component.DebugCard
 import li.cil.oc.server.component.DebugCard.AccessContext
 import org.apache.commons.codec.binary.Hex
@@ -62,11 +61,11 @@ class Settings(val config: Config) {
   val eepromSize = config.getInt("computer.eepromSize") max 0
   val eepromDataSize = config.getInt("computer.eepromDataSize") max 0
   val cpuComponentSupport = Array(config.getIntList("computer.cpuComponentCount"): _*) match {
-    case Array(tier1, tier2, tier3) =>
-      Array(tier1: Int, tier2: Int, tier3: Int)
+    case Array(tier1, tier2, tier3, tierCreative) =>
+      Array(tier1: Int, tier2: Int, tier3: Int, tierCreative: Int)
     case _ =>
       OpenComputers.log.warn("Bad number of CPU component counts, ignoring.")
-      Array(8, 12, 16)
+      Array(8, 12, 16, 1024)
   }
   val callBudgets = Array(config.getDoubleList("computer.callBudgets"): _*) match {
     case Array(tier1, tier2, tier3) =>
@@ -85,6 +84,7 @@ class Settings(val config: Config) {
   val allowBytecode = config.getBoolean("computer.lua.allowBytecode")
   val allowGC = config.getBoolean("computer.lua.allowGC")
   val enableLua53 = config.getBoolean("computer.lua.enableLua53")
+  val defaultLua53 = config.getBoolean("computer.lua.defaultLua53")
   val ramSizes = Array(config.getIntList("computer.lua.ramSizes"): _*) match {
     case Array(tier1, tier2, tier3, tier4, tier5, tier6) =>
       Array(tier1: Int, tier2: Int, tier3: Int, tier4: Int, tier5: Int, tier6: Int)
@@ -142,9 +142,7 @@ class Settings(val config: Config) {
 
   // ----------------------------------------------------------------------- //
   // power
-  var is3rdPartyPowerSystemPresent = false
-  val pureIgnorePower = config.getBoolean("power.ignorePower")
-  lazy val ignorePower = pureIgnorePower || (!is3rdPartyPowerSystemPresent && !Mods.isPowerProvidingModPresent)
+  val ignorePower = config.getBoolean("power.ignorePower")
   val tickFrequency = config.getDouble("power.tickFrequency") max 1
   val chargeRateExternal = config.getDouble("power.chargerChargeRate")
   val chargeRateTablet = config.getDouble("power.chargerChargeRateTablet")
@@ -154,6 +152,11 @@ class Settings(val config: Config) {
   val disassemblerTickAmount = config.getDouble("power.disassemblerTickAmount") max 1
   val printerTickAmount = config.getDouble("power.printerTickAmount") max 1
   val powerModBlacklist = config.getStringList("power.modBlacklist")
+
+  // power.carpetedCapacitors
+  val sheepPower = config.getDouble("power.carpetedCapacitors.sheepPower") max 0
+  val ocelotPower = config.getDouble("power.carpetedCapacitors.ocelotPower") max 0
+  val carpetDamageChance = config.getDouble("power.carpetedCapacitors.damageChance") max 0 min 1.0
 
   // power.buffer
   val bufferCapacitor = config.getDouble("power.buffer.capacitor") max 0
@@ -193,7 +196,13 @@ class Settings(val config: Config) {
   val robotTurnCost = config.getDouble("power.cost.robotTurn") max 0
   val robotMoveCost = config.getDouble("power.cost.robotMove") max 0
   val robotExhaustionCost = config.getDouble("power.cost.robotExhaustion") max 0
-  val wirelessCostPerRange = config.getDouble("power.cost.wirelessCostPerRange") max 0
+  val wirelessCostPerRange = Array(config.getDoubleList("power.cost.wirelessCostPerRange"): _*) match {
+    case Array(tier1, tier2) =>
+      Array((tier1: Double) max 0.0, (tier2: Double) max 0.0)
+    case _ =>
+      OpenComputers.log.warn("Bad number of wireless card energy costs, ignoring.")
+      Array(0.05, 0.05)
+  }
   val abstractBusPacketCost = config.getDouble("power.cost.abstractBusPacket") max 0
   val geolyzerScanCost = config.getDouble("power.cost.geolyzerScan") max 0
   val robotBaseCost = config.getDouble("power.cost.robotAssemblyBase") max 0
@@ -249,6 +258,7 @@ class Settings(val config: Config) {
   private val valuePowerAdvantage = config.getDouble("power.value.PowerAdvantage")
   private val valueRedstoneFlux = config.getDouble("power.value.RedstoneFlux")
   private val valueRotaryCraft = config.getDouble("power.value.RotaryCraft") / 11256.0
+  private val valueForgeEnergy = if (config.hasPath("power.value.ForgeEnergy")) config.getDouble("power.value.ForgeEnergy") else valueRedstoneFlux
 
   private val valueInternal = 1000
 
@@ -260,6 +270,7 @@ class Settings(val config: Config) {
   val ratioPowerAdvantage = valuePowerAdvantage / valueInternal
   val ratioRedstoneFlux = valueRedstoneFlux / valueInternal
   val ratioRotaryCraft = valueRotaryCraft / valueInternal
+  val ratioForgeEnergy = valueForgeEnergy / valueInternal
 
   // ----------------------------------------------------------------------- //
   // filesystem
@@ -330,12 +341,23 @@ class Settings(val config: Config) {
   val maxScreenWidth = config.getInt("misc.maxScreenWidth") max 1
   val maxScreenHeight = config.getInt("misc.maxScreenHeight") max 1
   val inputUsername = config.getBoolean("misc.inputUsername")
-  val maxClipboard = config.getInt("misc.maxClipboard") max 0
   val maxNetworkPacketSize = config.getInt("misc.maxNetworkPacketSize") max 0
   // Need at least 4 for nanomachine protocol. Because I can!
   val maxNetworkPacketParts = config.getInt("misc.maxNetworkPacketParts") max 4
-  val maxOpenPorts = config.getInt("misc.maxOpenPorts") max 0
-  val maxWirelessRange = config.getDouble("misc.maxWirelessRange") max 0
+  val maxOpenPorts = Array(config.getIntList("misc.maxOpenPorts"): _*) match {
+    case Array(wired, tier1, tier2) =>
+      Array((wired: Int) max 0, (tier1: Int) max 0, (tier2: Int) max 0)
+    case _ =>
+      OpenComputers.log.warn("Bad number of max open ports, ignoring.")
+      Array(16, 1, 16)
+  }
+  val maxWirelessRange = Array(config.getDoubleList("misc.maxWirelessRange"): _*) match {
+    case Array(tier1, tier2) =>
+      Array((tier1: Double) max 0.0, (tier2: Double) max 0.0)
+    case _ =>
+      OpenComputers.log.warn("Bad number of wireless card max ranges, ignoring.")
+      Array(16.0, 400.0)
+  }
   val rTreeMaxEntries = 10
   val terminalsPerServer = 4
   val updateCheck = config.getBoolean("misc.updateCheck")
@@ -390,6 +412,10 @@ class Settings(val config: Config) {
   val printsHaveOpacity = config.getBoolean("printer.printsHaveOpacity")
   val noclipMultiplier = config.getDouble("printer.noclipMultiplier") max 0
 
+  // chunkloader
+  val chunkloadDimensionBlacklist = Settings.getIntList(config, "chunkloader.dimBlacklist")
+  val chunkloadDimensionWhitelist = Settings.getIntList(config, "chunkloader.dimWhitelist")
+
   // ----------------------------------------------------------------------- //
   // integration
   val modBlacklist = config.getStringList("integration.modBlacklist")
@@ -441,24 +467,37 @@ class Settings(val config: Config) {
 
   val registerLuaJArchitecture = config.getBoolean("debug.registerLuaJArchitecture")
   val disableLocaleChanging = config.getBoolean("debug.disableLocaleChanging")
+
+  // >= 1.7.4
+  val maxSignalQueueSize: Int = (if (config.hasPath("computer.maxSignalQueueSize")) config.getInt("computer.maxSignalQueueSize") else 256) min 256
+
+  // >= 1.7.6
+  val vramSizes: Array[Double] = Array(config.getDoubleList("gpu.vramSizes"): _*) match {
+    case Array(tier1, tier2, tier3) => Array(tier1: Double, tier2: Double, tier3: Double)
+    case _ =>
+      OpenComputers.log.warn("Bad number of VRAM sizes (expected 3), ignoring.")
+      Array(1, 2, 3)
+  }
+
+  val bitbltCost: Double = if (config.hasPath("gpu.bitbltCost")) config.getDouble("gpu.bitbltCost") else 0.5
 }
 
 object Settings {
   val resourceDomain = "opencomputers"
   val namespace = "oc:"
   val savePath = "opencomputers/"
-  val scriptPath = "/assets/" + resourceDomain + "/lua/"
-  val screenResolutionsByTier = Array((50, 16), (80, 25), (160, 50))
-  val screenDepthsByTier = Array(api.internal.TextBuffer.ColorDepth.OneBit, api.internal.TextBuffer.ColorDepth.FourBit, api.internal.TextBuffer.ColorDepth.EightBit)
-  val deviceComplexityByTier = Array(12, 24, 32, 9001)
+  val scriptPath: String = "/assets/" + resourceDomain + "/lua/"
+  val screenResolutionsByTier: Array[(Int, Int)] = Array((50, 16), (80, 25), (160, 50))
+  val screenDepthsByTier: Array[api.internal.TextBuffer.ColorDepth] = Array(api.internal.TextBuffer.ColorDepth.OneBit, api.internal.TextBuffer.ColorDepth.FourBit, api.internal.TextBuffer.ColorDepth.EightBit)
+  val deviceComplexityByTier: Array[Int] = Array(12, 24, 32, 9001)
   var rTreeDebugRenderer = false
-  var blockRenderId = -1
+  var blockRenderId: Int = -1
 
-  def basicScreenPixels = screenResolutionsByTier(0)._1 * screenResolutionsByTier(0)._2
+  def basicScreenPixels: Int = screenResolutionsByTier(0)._1 * screenResolutionsByTier(0)._2
 
   private var settings: Settings = _
 
-  def get = settings
+  def get: Settings = settings
 
   def load(file: File) = {
     import scala.compat.Platform.EOL
@@ -515,6 +554,17 @@ object Settings {
     // Upgrading to version 1.5.20, changed relay delay default.
     VersionRange.createFromVersionSpec("[0.0, 1.5.20)") -> Array(
       "switch.relayDelayUpgrade"
+    ),
+    // Potion whitelist was fixed in 1.6.2.
+    VersionRange.createFromVersionSpec("[0.0, 1.6.2)") -> Array(
+      "nanomachines.potionWhitelist"
+    ),
+    // Upgrading past version 1.7.1, changed wireless card stuff for t1 card.
+    VersionRange.createFromVersionSpec("[0.0, 1.7.2)") -> Array(
+      "power.cost.wirelessCostPerRange",
+      "misc.maxWirelessRange",
+      "misc.maxOpenPorts",
+      "computer.cpuComponentCount"
     )
   )
 
@@ -663,4 +713,12 @@ object Settings {
       }
     }
   }
+
+  def getIntList(config: Config, path: String, default: Option[java.util.List[Integer]] = None): java.util.List[Integer] = {
+    if (config.hasPath(path))
+      config.getIntList(path)
+    else
+      default.getOrElse(new java.util.LinkedList[Integer]())
+  }
 }
+

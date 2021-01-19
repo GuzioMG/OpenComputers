@@ -1,6 +1,5 @@
 package li.cil.oc.common.init
 
-import java.util
 import java.util.concurrent.Callable
 
 import li.cil.oc.Constants
@@ -23,7 +22,7 @@ import li.cil.oc.common.item.data.TabletData
 import li.cil.oc.common.item.traits.Delegate
 import li.cil.oc.common.item.traits.SimpleItem
 import li.cil.oc.common.recipe.Recipes
-import li.cil.oc.integration.Mods
+import li.cil.oc.server.machine.luac.LuaStateFactory
 import net.minecraft.block.Block
 import net.minecraft.creativetab.CreativeTabs
 import net.minecraft.item.EnumDyeColor
@@ -31,9 +30,12 @@ import net.minecraft.item.Item
 import net.minecraft.item.ItemBlock
 import net.minecraft.item.ItemStack
 import net.minecraft.nbt.NBTTagCompound
-import net.minecraftforge.fml.common.registry.GameRegistry
+import net.minecraft.util.NonNullList
+import net.minecraft.util.ResourceLocation
+import net.minecraftforge.registries.{GameData}
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 object Items extends ItemAPI {
   val descriptors = mutable.Map.empty[String, ItemInfo]
@@ -41,33 +43,41 @@ object Items extends ItemAPI {
   val names = mutable.Map.empty[Any, String]
 
   val aliases = Map(
-    "dataCard" -> Constants.ItemName.DataCardTier1
+    "datacard" -> Constants.ItemName.DataCardTier1,
+    "wlancard" -> Constants.ItemName.WirelessNetworkCardTier2
   )
 
   override def get(name: String): ItemInfo = descriptors.get(name).orNull
 
-  override def get(stack: ItemStack) = names.get(getBlockOrItem(stack)) match {
+  override def get(stack: ItemStack): ItemInfo = names.get(getBlockOrItem(stack)) match {
     case Some(name) => get(name)
     case _ => null
   }
 
-  def registerBlock[T <: Block](instance: T, id: String) = {
+  def registerBlock(instance: Block, id: String): Block = {
     if (!descriptors.contains(id)) {
       instance match {
         case simple: SimpleBlock =>
           instance.setUnlocalizedName("oc." + id)
-          GameRegistry.registerBlock(simple, classOf[common.block.Item], id)
+          instance.setRegistryName(id)
+          GameData.register_impl(instance)
           OpenComputers.proxy.registerModel(instance, id)
+
+          val item : Item = new common.block.Item(instance)
+          item.setUnlocalizedName("oc." + id)
+          item.setRegistryName(id)
+          GameData.register_impl(item)
+          OpenComputers.proxy.registerModel(item, id)
         case _ =>
       }
       descriptors += id -> new ItemInfo {
-        override def name = id
+        override def name: String = id
 
         override def block = instance
 
         override def item = null
 
-        override def createItemStack(size: Int) = instance match {
+        override def createItemStack(size: Int): ItemStack = instance match {
           case simple: SimpleBlock => simple.createItemStack(size)
           case _ => new ItemStack(instance, size)
         }
@@ -77,40 +87,40 @@ object Items extends ItemAPI {
     instance
   }
 
-  def registerItem[T <: Delegate](delegate: T, id: String) = {
+  def registerItem[T <: Delegate](delegate: T, id: String): T = {
     if (!descriptors.contains(id)) {
       OpenComputers.proxy.registerModel(delegate, id)
       descriptors += id -> new ItemInfo {
-        override def name = id
+        override def name: String = id
 
         override def block = null
 
-        override def item = delegate.parent
+        override def item: Delegator = delegate.parent
 
-        override def createItemStack(size: Int) = delegate.createItemStack(size)
+        override def createItemStack(size: Int): ItemStack = delegate.createItemStack(size)
       }
       names += delegate -> id
     }
     delegate
   }
 
-  def registerItem(instance: Item, id: String) = {
+  def registerItem(instance: Item, id: String): Item = {
     if (!descriptors.contains(id)) {
       instance match {
         case simple: SimpleItem =>
           simple.setUnlocalizedName("oc." + id)
-          GameRegistry.registerItem(simple, id)
+          GameData.register_impl(simple.setRegistryName(new ResourceLocation(Settings.resourceDomain, id)))
           OpenComputers.proxy.registerModel(instance, id)
         case _ =>
       }
       descriptors += id -> new ItemInfo {
-        override def name = id
+        override def name: String = id
 
         override def block = null
 
-        override def item = instance
+        override def item: Item = instance
 
-        override def createItemStack(size: Int) = instance match {
+        override def createItemStack(size: Int): ItemStack = instance match {
           case simple: SimpleItem => simple.createItemStack(size)
           case _ => new ItemStack(instance, size)
         }
@@ -120,26 +130,26 @@ object Items extends ItemAPI {
     instance
   }
 
-  def registerStack(stack: ItemStack, id: String) = {
+  def registerStack(stack: ItemStack, id: String): ItemStack = {
     val immutableStack = stack.copy()
     descriptors += id -> new ItemInfo {
-      override def name = id
+      override def name: String = id
 
       override def block = null
 
       override def createItemStack(size: Int): ItemStack = {
         val copy = immutableStack.copy()
-        copy.stackSize = size
+        copy.setCount(size)
         copy
       }
 
-      override def item = immutableStack.getItem
+      override def item: Item = immutableStack.getItem
     }
     stack
   }
 
   private def getBlockOrItem(stack: ItemStack): Any =
-    if (stack == null) null
+    if (stack.isEmpty) null
     else Delegator.subItem(stack).getOrElse(stack.getItem match {
       case block: ItemBlock => block.getBlock
       case item => item
@@ -147,11 +157,7 @@ object Items extends ItemAPI {
 
   // ----------------------------------------------------------------------- //
 
-  val registeredItems = mutable.ArrayBuffer.empty[ItemStack]
-
-  @Deprecated
-  override def registerFloppy(name: String, color: EnumDyeColor, factory: Callable[FileSystem]): ItemStack =
-    registerFloppy(name, color, factory, doRecipeCycling = false)
+  val registeredItems: ArrayBuffer[ItemStack] = mutable.ArrayBuffer.empty[ItemStack]
 
   override def registerFloppy(name: String, color: EnumDyeColor, factory: Callable[FileSystem], doRecipeCycling: Boolean): ItemStack = {
     val stack = Loot.registerLootDisk(name, color, factory, doRecipeCycling)
@@ -187,9 +193,9 @@ object Items extends ItemAPI {
 
   // ----------------------------------------------------------------------- //
 
-  private def safeGetStack(name: String) = Option(get(name)).map(_.createItemStack(1)).orNull
+  private def safeGetStack(name: String) = Option(get(name)).map(_.createItemStack(1)).getOrElse(ItemStack.EMPTY)
 
-  def createConfiguredDrone() = {
+  def createConfiguredDrone(): ItemStack = {
     val data = new DroneData()
 
     data.name = "Crecopter"
@@ -202,18 +208,19 @@ object Items extends ItemAPI {
       safeGetStack(Constants.ItemName.TankUpgrade),
       safeGetStack(Constants.ItemName.TankControllerUpgrade),
       safeGetStack(Constants.ItemName.LeashUpgrade),
+      safeGetStack(Constants.ItemName.AngelUpgrade),
 
-      safeGetStack(Constants.ItemName.WirelessNetworkCard),
+      safeGetStack(Constants.ItemName.WirelessNetworkCardTier2),
 
-      safeGetStack(Constants.ItemName.CPUTier3),
+      LuaStateFactory.setDefaultArch(safeGetStack(Constants.ItemName.CPUTier3)),
       safeGetStack(Constants.ItemName.RAMTier6),
       safeGetStack(Constants.ItemName.RAMTier6)
-    )
+    ).filter(!_.isEmpty)
 
     data.createItemStack()
   }
 
-  def createConfiguredMicrocontroller() = {
+  def createConfiguredMicrocontroller(): ItemStack = {
     val data = new MicrocontrollerData()
 
     data.tier = Tier.Four
@@ -223,17 +230,17 @@ object Items extends ItemAPI {
       safeGetStack(Constants.ItemName.PistonUpgrade),
 
       safeGetStack(Constants.ItemName.RedstoneCardTier2),
-      safeGetStack(Constants.ItemName.WirelessNetworkCard),
+      safeGetStack(Constants.ItemName.WirelessNetworkCardTier2),
 
-      safeGetStack(Constants.ItemName.CPUTier3),
+      LuaStateFactory.setDefaultArch(safeGetStack(Constants.ItemName.CPUTier3)),
       safeGetStack(Constants.ItemName.RAMTier6),
       safeGetStack(Constants.ItemName.RAMTier6)
-    )
+    ).filter(!_.isEmpty)
 
     data.createItemStack()
   }
 
-  def createConfiguredRobot() = {
+  def createConfiguredRobot(): ItemStack = {
     val data = new RobotData()
 
     data.name = "Creatix"
@@ -243,6 +250,7 @@ object Items extends ItemAPI {
     data.components = Array(
       safeGetStack(Constants.BlockName.ScreenTier1),
       safeGetStack(Constants.BlockName.Keyboard),
+      safeGetStack(Constants.BlockName.Geolyzer),
       safeGetStack(Constants.ItemName.InventoryUpgrade),
       safeGetStack(Constants.ItemName.InventoryUpgrade),
       safeGetStack(Constants.ItemName.InventoryUpgrade),
@@ -251,62 +259,67 @@ object Items extends ItemAPI {
       safeGetStack(Constants.ItemName.TankUpgrade),
       safeGetStack(Constants.ItemName.TankControllerUpgrade),
       safeGetStack(Constants.ItemName.CraftingUpgrade),
+      safeGetStack(Constants.ItemName.HoverUpgradeTier2),
+      safeGetStack(Constants.ItemName.AngelUpgrade),
+      safeGetStack(Constants.ItemName.TradingUpgrade),
+      safeGetStack(Constants.ItemName.ExperienceUpgrade),
 
       safeGetStack(Constants.ItemName.GraphicsCardTier3),
       safeGetStack(Constants.ItemName.RedstoneCardTier2),
-      safeGetStack(Constants.ItemName.WirelessNetworkCard),
+      safeGetStack(Constants.ItemName.WirelessNetworkCardTier2),
       safeGetStack(Constants.ItemName.InternetCard),
 
-      safeGetStack(Constants.ItemName.CPUTier3),
+      LuaStateFactory.setDefaultArch(safeGetStack(Constants.ItemName.CPUTier3)),
       safeGetStack(Constants.ItemName.RAMTier6),
       safeGetStack(Constants.ItemName.RAMTier6),
 
       safeGetStack(Constants.ItemName.LuaBios),
       safeGetStack(Constants.ItemName.OpenOS),
       safeGetStack(Constants.ItemName.HDDTier3)
-    )
+    ).filter(!_.isEmpty)
     data.containers = Array(
       safeGetStack(Constants.ItemName.CardContainerTier3),
       safeGetStack(Constants.ItemName.UpgradeContainerTier3),
       safeGetStack(Constants.BlockName.DiskDrive)
-    )
+    ).filter(!_.isEmpty)
 
     data.createItemStack()
   }
 
-  def createConfiguredTablet() = {
+  def createConfiguredTablet(): ItemStack = {
     val data = new TabletData()
 
     data.tier = Tier.Four
     data.energy = Settings.get.bufferTablet
     data.maxEnergy = data.energy
     data.items = Array(
-      Option(safeGetStack(Constants.BlockName.ScreenTier1)),
-      Option(safeGetStack(Constants.BlockName.Keyboard)),
+      safeGetStack(Constants.BlockName.ScreenTier1),
+      safeGetStack(Constants.BlockName.Keyboard),
 
-      Option(safeGetStack(Constants.ItemName.SignUpgrade)),
-      Option(safeGetStack(Constants.ItemName.PistonUpgrade)),
-      Option(safeGetStack(Constants.BlockName.Geolyzer)),
-      Option(safeGetStack(Constants.ItemName.NavigationUpgrade)),
+      safeGetStack(Constants.ItemName.SignUpgrade),
+      safeGetStack(Constants.ItemName.PistonUpgrade),
+      safeGetStack(Constants.BlockName.Geolyzer),
+      safeGetStack(Constants.ItemName.NavigationUpgrade),
+      safeGetStack(Constants.ItemName.Analyzer),
 
-      Option(safeGetStack(Constants.ItemName.GraphicsCardTier2)),
-      Option(safeGetStack(Constants.ItemName.RedstoneCardTier2)),
-      Option(safeGetStack(Constants.ItemName.WirelessNetworkCard)),
+      safeGetStack(Constants.ItemName.GraphicsCardTier2),
+      safeGetStack(Constants.ItemName.RedstoneCardTier2),
+      safeGetStack(Constants.ItemName.WirelessNetworkCardTier2),
 
-      Option(safeGetStack(Constants.ItemName.CPUTier3)),
-      Option(safeGetStack(Constants.ItemName.RAMTier6)),
-      Option(safeGetStack(Constants.ItemName.RAMTier6)),
+      LuaStateFactory.setDefaultArch(safeGetStack(Constants.ItemName.CPUTier3)),
+      safeGetStack(Constants.ItemName.RAMTier6),
+      safeGetStack(Constants.ItemName.RAMTier6),
 
-      Option(safeGetStack(Constants.ItemName.LuaBios)),
-      Option(safeGetStack(Constants.ItemName.HDDTier3))
-    ).padTo(32, None)
-    data.items(31) = Option(safeGetStack(Constants.ItemName.OpenOS))
-    data.container = Option(safeGetStack(Constants.BlockName.DiskDrive))
+      safeGetStack(Constants.ItemName.LuaBios),
+      safeGetStack(Constants.ItemName.HDDTier3)
+    ).padTo(32, ItemStack.EMPTY)
+    data.items(31) = safeGetStack(Constants.ItemName.OpenOS)
+    data.container = safeGetStack(Constants.BlockName.DiskDrive)
 
     data.createItemStack()
   }
 
-  def createChargedHoverBoots() = {
+  def createChargedHoverBoots(): ItemStack = {
     val data = new HoverBootsData()
     data.charge = Settings.get.bufferHoverBoots
 
@@ -323,7 +336,6 @@ object Items extends ItemAPI {
     initUpgrades()
     initStorage()
     initSpecial()
-    initIntegration()
 
     // Register aliases.
     for ((k, v) <- aliases) {
@@ -335,7 +347,6 @@ object Items extends ItemAPI {
   private def initMaterials(): Unit = {
     val materials = newItem(new item.Delegator(), "material")
 
-    registerItem(new item.IronNugget(materials), Constants.ItemName.IronNugget)
     Recipes.addSubItem(new item.CuttingWire(materials), Constants.ItemName.CuttingWire, "oc:materialCuttingWire")
     Recipes.addSubItem(new item.Acid(materials), Constants.ItemName.Acid, "oc:materialAcid")
     Recipes.addSubItem(new item.RawCircuitBoard(materials), Constants.ItemName.RawCircuitBoard, "oc:materialCircuitBoardRaw")
@@ -436,7 +447,7 @@ object Items extends ItemAPI {
     Recipes.addSubItem(new item.RedstoneCard(cards, Tier.One), Constants.ItemName.RedstoneCardTier1, "oc:redstoneCard1")
     Recipes.addSubItem(new item.RedstoneCard(cards, Tier.Two), Constants.ItemName.RedstoneCardTier2, "oc:redstoneCard2")
     Recipes.addSubItem(new item.NetworkCard(cards), Constants.ItemName.NetworkCard, "oc:lanCard")
-    Recipes.addSubItem(new item.WirelessNetworkCard(cards), Constants.ItemName.WirelessNetworkCard, "oc:wlanCard")
+    Recipes.addSubItem(new item.WirelessNetworkCard(cards, Tier.Two), Constants.ItemName.WirelessNetworkCardTier2, "oc:wlanCard2")
     Recipes.addSubItem(new item.InternetCard(cards), Constants.ItemName.InternetCard, "oc:internetCard")
     Recipes.addSubItem(new item.LinkedCard(cards), Constants.ItemName.LinkedCard, "oc:linkedCard")
 
@@ -487,6 +498,13 @@ object Items extends ItemAPI {
     // 1.6
     Recipes.addSubItem(new item.UpgradeTrading(upgrades), Constants.ItemName.TradingUpgrade, "oc:tradingUpgrade")
     Recipes.addSubItem(new item.UpgradeMF(upgrades), Constants.ItemName.MFU, "oc:mfu")
+
+    // 1.7.2
+    Recipes.addSubItem(new item.WirelessNetworkCard(upgrades, Tier.One), Constants.ItemName.WirelessNetworkCardTier1, "oc:wlanCard1")
+    registerItem(new item.ComponentBus(upgrades, Tier.Four), Constants.ItemName.ComponentBusCreative)
+
+    // 1.8
+    Recipes.addSubItem(new item.UpgradeStickyPiston(upgrades), Constants.ItemName.StickyPistonUpgrade, "oc:stickyPistonUpgrade")
   }
 
   // Storage media of all kinds.
@@ -519,9 +537,11 @@ object Items extends ItemAPI {
         Items.createChargedHoverBoots()
       ) ++ Loot.disksForClient ++ registeredItems
 
-      override def getSubItems(item: Item, tab: CreativeTabs, list: util.List[ItemStack]): Unit = {
-        super.getSubItems(item, tab, list)
-        configuredItems.foreach(list.add)
+      override def getSubItems(tab: CreativeTabs, list: NonNullList[ItemStack]): Unit = {
+        super.getSubItems(tab, list)
+        if(isInCreativeTab(tab)){
+          configuredItems.foreach(list.add)
+        }
       }
     }, "misc")
 
@@ -530,18 +550,9 @@ object Items extends ItemAPI {
     registerItem(new item.Present(misc), Constants.ItemName.Present)
   }
 
-  // Items used for integration with other mods.
-  private def initIntegration(): Unit = {
-    val integration = newItem(new item.Delegator(), "integration")
-
-    // Only register recipes if the related mods are present.
-    Recipes.addSubItem(new item.AbstractBusCard(integration), Constants.ItemName.AbstractBusCard, Mods.StargateTech2.isAvailable, "oc:abstractBusCard")
-    Recipes.addSubItem(new item.WorldSensorCard(integration), Constants.ItemName.WorldSensorCard, Mods.Galacticraft.isAvailable, "oc:worldSensorCard")
-  }
-
   private def newItem[T <: Item](item: T, name: String): T = {
     item.setUnlocalizedName("oc." + name)
-    GameRegistry.registerItem(item, name)
+    GameData.register_impl(item.setRegistryName(new ResourceLocation(Settings.resourceDomain, name)))
     item
   }
 }

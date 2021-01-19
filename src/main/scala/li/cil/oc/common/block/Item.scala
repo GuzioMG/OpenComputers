@@ -5,85 +5,41 @@ import java.util
 import li.cil.oc.Constants
 import li.cil.oc.Settings
 import li.cil.oc.api
-import li.cil.oc.client.KeyBindings
 import li.cil.oc.common.item.data.PrintData
 import li.cil.oc.common.item.data.RobotData
 import li.cil.oc.common.tileentity
 import li.cil.oc.util.Color
 import li.cil.oc.util.ItemColorizer
-import li.cil.oc.util.ItemCosts
-import li.cil.oc.util.ItemUtils
 import net.minecraft.block.Block
 import net.minecraft.block.state.IBlockState
+import net.minecraft.client.util.ITooltipFlag
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.item.EnumDyeColor
 import net.minecraft.item.EnumRarity
 import net.minecraft.item.ItemBlock
 import net.minecraft.item.ItemStack
-import net.minecraft.util.BlockPos
 import net.minecraft.util.EnumFacing
-import net.minecraft.util.StatCollector
+import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 
 class Item(value: Block) extends ItemBlock(value) {
   setHasSubtypes(true)
 
-  private lazy val Cable = api.Items.get(Constants.BlockName.Cable)
-
-  private lazy val Cases = Set(
-    api.Items.get(Constants.BlockName.CaseTier1),
-    api.Items.get(Constants.BlockName.CaseTier2),
-    api.Items.get(Constants.BlockName.CaseTier3),
-    api.Items.get(Constants.BlockName.CaseCreative)
-  )
-
-  private lazy val DirectTint = Set(
-    api.Items.get(Constants.BlockName.ScreenTier1),
-    api.Items.get(Constants.BlockName.ScreenTier2),
-    api.Items.get(Constants.BlockName.ScreenTier3),
-    api.Items.get(Constants.BlockName.Print),
-    api.Items.get(Constants.BlockName.Robot)
-  )
-
-  private lazy val ChameliumBlock = api.Items.get(Constants.BlockName.ChameliumBlock)
-
-  override def addInformation(stack: ItemStack, player: EntityPlayer, tooltip: util.List[String], advanced: Boolean) {
-    super.addInformation(stack, player, tooltip, advanced)
+  override def addInformation(stack: ItemStack, world: World, tooltip: util.List[String], flag: ITooltipFlag) {
+    super.addInformation(stack, world, tooltip, flag)
     block match {
       case (simple: SimpleBlock) =>
-        simple.addInformation(getMetadata(stack.getItemDamage), stack, player, tooltip, advanced)
-
-        if (KeyBindings.showMaterialCosts) {
-          ItemCosts.addTooltip(stack, tooltip)
-        }
-        else {
-          tooltip.add(StatCollector.translateToLocalFormatted(
-            Settings.namespace + "tooltip.MaterialCosts",
-            KeyBindings.getKeyBindingName(KeyBindings.materialCosts)))
-        }
+        simple.addInformation(getMetadata(stack.getItemDamage), stack, world, tooltip, flag)
       case _ =>
     }
   }
 
-  override def getColorFromItemStack(stack: ItemStack, tintIndex: Int) = {
-    val descriptor = api.Items.get(stack)
-    if (descriptor == Cable)
-      if (ItemColorizer.hasColor(stack)) ItemColorizer.getColor(stack) else tintIndex
-    else if (Cases.contains(descriptor))
-      Color.rgbValues(Color.byTier(ItemUtils.caseTier(stack)))
-    else if (descriptor == ChameliumBlock)
-      Color.rgbValues(EnumDyeColor.byDyeDamage(stack.getItemDamage))
-    else if (DirectTint.contains(descriptor))
-      tintIndex
-    else super.getColorFromItemStack(stack, tintIndex)
-  }
-
-  override def getRarity(stack: ItemStack) = block match {
+  override def getRarity(stack: ItemStack): EnumRarity = block match {
     case simple: SimpleBlock => simple.rarity(stack)
     case _ => EnumRarity.COMMON
   }
 
-  override def getMetadata(itemDamage: Int) = itemDamage
+  override def getMetadata(itemDamage: Int): Int = itemDamage
 
   override def getItemStackDisplayName(stack: ItemStack): String = {
     if (api.Items.get(stack) == api.Items.get(Constants.BlockName.Print)) {
@@ -93,7 +49,7 @@ class Item(value: Block) extends ItemBlock(value) {
     else super.getItemStackDisplayName(stack)
   }
 
-  override def getUnlocalizedName = block match {
+  override def getUnlocalizedName: String = block match {
     case simple: SimpleBlock => simple.getUnlocalizedName
     case _ => Settings.namespace + "tile"
   }
@@ -108,9 +64,20 @@ class Item(value: Block) extends ItemBlock(value) {
     else super.getDamage(stack)
   }
 
+  override def setDamage(stack: ItemStack, damage: Int): Unit = {
+    if (api.Items.get(stack) == api.Items.get(Constants.BlockName.Cable)) {
+      if(damage != Color.rgbValues(EnumDyeColor.SILVER)) {
+        ItemColorizer.setColor(stack, damage)
+      } else {
+        ItemColorizer.removeColor(stack)
+      }
+    }
+    else super.setDamage(stack, damage)
+  }
+
   override def isBookEnchantable(a: ItemStack, b: ItemStack) = false
 
-  override def placeBlockAt(stack: ItemStack, player: EntityPlayer, world: World, pos: BlockPos, side: EnumFacing, hitX: Float, hitY: Float, hitZ: Float, newState: IBlockState) = {
+  override def placeBlockAt(stack: ItemStack, player: EntityPlayer, world: World, pos: BlockPos, side: EnumFacing, hitX: Float, hitY: Float, hitZ: Float, newState: IBlockState): Boolean = {
     // When placing robots in creative mode, we have to copy the stack
     // manually before it's placed to ensure different component addresses
     // in the different robots, to avoid interference of screens e.g.

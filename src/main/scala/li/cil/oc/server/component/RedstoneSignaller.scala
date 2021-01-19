@@ -6,9 +6,13 @@ import li.cil.oc.api.machine.Callback
 import li.cil.oc.api.machine.Context
 import li.cil.oc.api.network.Visibility
 import li.cil.oc.api.prefab
+import li.cil.oc.api.prefab.AbstractManagedEnvironment
+import li.cil.oc.common.tileentity.traits.RedstoneChangedEventArgs
 import net.minecraft.nbt.NBTTagCompound
 
-trait RedstoneSignaller extends prefab.ManagedEnvironment {
+import scala.collection.mutable.ArrayBuffer
+
+trait RedstoneSignaller extends AbstractManagedEnvironment {
   override val node = Network.newNode(this, Visibility.Network).
     withComponent("redstone", Visibility.Neighbors).
     create()
@@ -31,9 +35,13 @@ trait RedstoneSignaller extends prefab.ManagedEnvironment {
 
   // ----------------------------------------------------------------------- //
 
-  def onRedstoneChanged(side: AnyRef, oldMaxValue: Int, newMaxValue: Int): Unit = {
-    node.sendToReachable("computer.signal", "redstone_changed", side, Int.box(oldMaxValue), Int.box(newMaxValue))
-    if (oldMaxValue < wakeThreshold && newMaxValue >= wakeThreshold) {
+  def onRedstoneChanged(args: RedstoneChangedEventArgs): Unit = {
+    val side: AnyRef = if (args.side == null) "wireless" else Int.box(args.side.ordinal)
+    val flatArgs = ArrayBuffer[Object]("redstone_changed", side, Int.box(args.oldValue), Int.box(args.newValue))
+    if (args.color >= 0)
+      flatArgs += Int.box(args.color)
+    node.sendToReachable("computer.signal", flatArgs: _*)
+    if (args.oldValue < wakeThreshold && args.newValue >= wakeThreshold) {
       if (wakeNeighborsOnly)
         node.sendToNeighbors("computer.start")
       else
@@ -43,13 +51,15 @@ trait RedstoneSignaller extends prefab.ManagedEnvironment {
 
   // ----------------------------------------------------------------------- //
 
+  private final val WakeThresholdNbt = "wakeThreshold"
+
   override def load(nbt: NBTTagCompound): Unit = {
     super.load(nbt)
-    wakeThreshold = nbt.getInteger("wakeThreshold")
+    wakeThreshold = nbt.getInteger(WakeThresholdNbt)
   }
 
   override def save(nbt: NBTTagCompound): Unit = {
     super.save(nbt)
-    nbt.setInteger("wakeThreshold", wakeThreshold)
+    nbt.setInteger(WakeThresholdNbt, wakeThreshold)
   }
 }

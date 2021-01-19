@@ -11,6 +11,8 @@ import li.cil.oc.Settings
 import li.cil.oc.api
 import li.cil.oc.api.fs.Label
 import li.cil.oc.api.network.EnvironmentHost
+import li.cil.oc.common.item.Delegator
+import li.cil.oc.common.item.traits.FileSystemLike
 import li.cil.oc.server.component
 import net.minecraft.item.ItemStack
 import net.minecraft.nbt.NBTTagCompound
@@ -19,7 +21,7 @@ import net.minecraftforge.common.DimensionManager
 import scala.util.Try
 
 object FileSystem extends api.detail.FileSystemAPI {
-  lazy val isCaseInsensitive = Settings.get.forceCaseInsensitive || (try {
+  lazy val isCaseInsensitive: Boolean = Settings.get.forceCaseInsensitive || (try {
     val uuid = UUID.randomUUID().toString
     val lowerCase = new io.File(DimensionManager.getCurrentSaveRootDirectory, uuid + "oc_rox")
     val upperCase = new io.File(DimensionManager.getCurrentSaveRootDirectory, uuid + "OC_ROX")
@@ -46,9 +48,9 @@ object FileSystem extends api.detail.FileSystemAPI {
   // accordingly before the path is passed to the file system.
   private val invalidChars = """\:*?"<>|""".toSet
 
-  def isValidFilename(name: String) = !name.exists(invalidChars.contains)
+  def isValidFilename(name: String): Boolean = !name.exists(invalidChars.contains)
 
-  def validatePath(path: String) = {
+  def validatePath(path: String): String = {
     if (!isValidFilename(path)) {
       throw new java.io.IOException("path contains invalid characters")
     }
@@ -110,11 +112,30 @@ object FileSystem extends api.detail.FileSystemAPI {
     else null
   }
 
+  def removeAddress(fsStack: ItemStack): Boolean = {
+    Delegator.subItem(fsStack) match {
+      case Some(drive: FileSystemLike) => {
+        val data = li.cil.oc.integration.opencomputers.Item.dataTag(fsStack)
+        if (data.hasKey("node")) {
+          val nodeData = data.getCompoundTag("node")
+          if (nodeData.hasKey("address")) {
+            nodeData.removeTag("address")
+            return true
+          }
+        }
+      }
+      case _ =>
+    }
+    false
+  }
+
   def fromMemory(capacity: Long): api.fs.FileSystem = new RamFileSystem(capacity)
 
-  override def asReadOnly(fileSystem: api.fs.FileSystem) =
+  override def asReadOnly(fileSystem: api.fs.FileSystem): api.fs.FileSystem =
     if (fileSystem.isReadOnly) fileSystem
-    else new ReadOnlyWrapper(fileSystem)
+    else {
+      new ReadOnlyWrapper(fileSystem)
+    }
 
   def asManagedEnvironment(fileSystem: api.fs.FileSystem, label: Label, host: EnvironmentHost, accessSound: String, speed: Int) =
     Option(fileSystem).flatMap(fs => Some(new component.FileSystem(fs, label, Option(host), Option(accessSound), (speed - 1) max 0 min 5))).orNull
@@ -139,16 +160,18 @@ object FileSystem extends api.detail.FileSystemAPI {
 
   abstract class ItemLabel(val stack: ItemStack) extends Label
 
-  private class ReadOnlyLabel(val label: String) extends Label {
+  class ReadOnlyLabel(val label: String) extends Label {
     def setLabel(value: String) = throw new IllegalArgumentException("label is read only")
 
     def getLabel = label
+
+    private final val LabelTag = Settings.namespace + "fs.label"
 
     override def load(nbt: NBTTagCompound) {}
 
     override def save(nbt: NBTTagCompound) {
       if (label != null) {
-        nbt.setString(Settings.namespace + "fs.label", label)
+        nbt.setString(LabelTag, label)
       }
     }
   }

@@ -8,29 +8,30 @@ import li.cil.oc.common.block.property.PropertyRotatable
 import li.cil.oc.common.item.data.RaidData
 import li.cil.oc.common.tileentity
 import net.minecraft.block.Block
-import net.minecraft.block.state.BlockState
+import net.minecraft.block.state.BlockStateContainer
 import net.minecraft.block.state.IBlockState
+import net.minecraft.client.util.ITooltipFlag
 import net.minecraft.entity.EntityLivingBase
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.item.ItemStack
-import net.minecraft.util.BlockPos
 import net.minecraft.util.EnumFacing
+import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 
 import scala.reflect.ClassTag
 
 class Raid(protected implicit val tileTag: ClassTag[tileentity.Raid]) extends SimpleBlock with traits.GUI with traits.CustomDrops[tileentity.Raid] {
-  override def createBlockState(): BlockState = new BlockState(this, PropertyRotatable.Facing)
+  override def createBlockState() = new BlockStateContainer(this, PropertyRotatable.Facing)
 
   override def getStateFromMeta(meta: Int): IBlockState = getDefaultState.withProperty(PropertyRotatable.Facing, EnumFacing.getHorizontal(meta))
 
   override def getMetaFromState(state: IBlockState): Int = state.getValue(PropertyRotatable.Facing).getHorizontalIndex
 
-  override protected def tooltipTail(metadata: Int, stack: ItemStack, player: EntityPlayer, tooltip: util.List[String], advanced: Boolean) {
-    super.tooltipTail(metadata, stack, player, tooltip, advanced)
+  override protected def tooltipTail(metadata: Int, stack: ItemStack, world: World, tooltip: util.List[String], advanced: ITooltipFlag) {
+    super.tooltipTail(metadata, stack, world, tooltip, advanced)
     if (KeyBindings.showExtendedTooltips) {
       val data = new RaidData(stack)
-      for (disk <- data.disks if disk != null) {
+      for (disk <- data.disks if !disk.isEmpty) {
         tooltip.add("- " + disk.getDisplayName)
       }
     }
@@ -44,9 +45,9 @@ class Raid(protected implicit val tileTag: ClassTag[tileentity.Raid]) extends Si
 
   // ----------------------------------------------------------------------- //
 
-  override def hasComparatorInputOverride = true
+  override def hasComparatorInputOverride(state: IBlockState): Boolean = true
 
-  override def getComparatorInputOverride(world: World, pos: BlockPos) =
+  override def getComparatorInputOverride(state: IBlockState, world: World, pos: BlockPos): Int =
     world.getTileEntity(pos) match {
       case raid: tileentity.Raid if raid.presence.forall(ok => ok) => 15
       case _ => 0
@@ -70,9 +71,9 @@ class Raid(protected implicit val tileTag: ClassTag[tileentity.Raid]) extends Si
   override protected def doCustomDrops(tileEntity: tileentity.Raid, player: EntityPlayer, willHarvest: Boolean): Unit = {
     super.doCustomDrops(tileEntity, player, willHarvest)
     val stack = createItemStack()
-    if (tileEntity.items.exists(_.isDefined)) {
+    if (tileEntity.items.exists(!_.isEmpty)) {
       val data = new RaidData()
-      data.disks = tileEntity.items.map(_.orNull)
+      data.disks = tileEntity.items.clone()
       tileEntity.filesystem.foreach(_.save(data.filesystem))
       data.label = Option(tileEntity.label.getLabel)
       data.save(stack)

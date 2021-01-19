@@ -6,6 +6,7 @@ import li.cil.oc.api.network._
 import li.cil.oc.client.gui
 import li.cil.oc.common.component.TextBuffer
 import li.cil.oc.util.BlockPosition
+import li.cil.oc.common.tileentity.traits.RedstoneChangedEventArgs
 import li.cil.oc.util.Color
 import li.cil.oc.util.ExtendedWorld._
 import net.minecraft.client.Minecraft
@@ -13,8 +14,8 @@ import net.minecraft.entity.Entity
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.entity.projectile.EntityArrow
 import net.minecraft.nbt.NBTTagCompound
-import net.minecraft.util.AxisAlignedBB
 import net.minecraft.util.EnumFacing
+import net.minecraft.util.math.AxisAlignedBB
 import net.minecraftforge.fml.relauncher.Side
 import net.minecraftforge.fml.relauncher.SideOnly
 
@@ -58,13 +59,15 @@ class Screen(var tier: Int) extends traits.TextBuffer with SidedEnvironment with
 
   private val arrows = mutable.Set.empty[EntityArrow]
 
+  private val lastWalked = mutable.WeakHashMap.empty[Entity, (Int, Int)]
+
   setColor(Color.rgbValues(Color.byTier(tier)))
 
   @SideOnly(Side.CLIENT)
-  override def canConnect(side: EnumFacing) = toLocal(side) != EnumFacing.SOUTH
+  override def canConnect(side: EnumFacing) = side != facing
 
   // Allow connections from front for keyboards, and keyboards only...
-  override def sidedNode(side: EnumFacing) = if (toLocal(side) != EnumFacing.SOUTH || (world.isBlockLoaded(getPos.offset(side)) && world.getTileEntity(getPos.offset(side)).isInstanceOf[Keyboard])) node else null
+  override def sidedNode(side: EnumFacing) = if (side != facing || (getWorld.isBlockLoaded(getPos.offset(side)) && getWorld.getTileEntity(getPos.offset(side)).isInstanceOf[Keyboard])) node else null
 
   // ----------------------------------------------------------------------- //
 
@@ -79,7 +82,7 @@ class Screen(var tier: Int) extends traits.TextBuffer with SidedEnvironment with
   def hasKeyboard = screens.exists(screen =>
     EnumFacing.values.map(side => (side, {
       val blockPos = BlockPosition(screen).offset(side)
-      if (world.blockExists(blockPos)) world.getTileEntity(blockPos)
+      if (getWorld.blockExists(blockPos)) getWorld.getTileEntity(blockPos)
       else null
     })).exists {
       case (side, keyboard: Keyboard) => keyboard.hasNodeOnSide(side.getOpposite)
@@ -111,7 +114,7 @@ class Screen(var tier: Int) extends traits.TextBuffer with SidedEnvironment with
     if (ax <= border || ay <= border || ax >= width - border || ay >= height - border) {
       return (false, None)
     }
-    if (!world.isRemote) return (true, None)
+    if (!getWorld.isRemote) return (true, None)
 
     val (iw, ih) = (width - border * 2, height - border * 2)
     val (rx, ry) = ((ax - border) / iw, (ay - border) / ih)
@@ -164,11 +167,14 @@ class Screen(var tier: Int) extends traits.TextBuffer with SidedEnvironment with
 
   def walk(entity: Entity) {
     val (x, y) = localPosition
-    entity match {
-      case player: EntityPlayer if Settings.get.inputUsername =>
-        origin.node.sendToReachable("computer.signal", "walk", Int.box(x + 1), Int.box(height - y), player.getName)
-      case _ =>
-        origin.node.sendToReachable("computer.signal", "walk", Int.box(x + 1), Int.box(height - y))
+    origin.lastWalked.put(entity, localPosition) match {
+      case Some((oldX, oldY)) if oldX == x && oldY == y => // Ignore
+      case _ => entity match {
+        case player: EntityPlayer if Settings.get.inputUsername =>
+          origin.node.sendToReachable("computer.signal", "walk", Int.box(x + 1), Int.box(height - y), player.getName)
+        case _ =>
+          origin.node.sendToReachable("computer.signal", "walk", Int.box(x + 1), Int.box(height - y))
+      }
     }
   }
 
@@ -192,7 +198,7 @@ class Screen(var tier: Int) extends traits.TextBuffer with SidedEnvironment with
         val lpos = project(current)
         def tryQueue(dx: Int, dy: Int) {
           val npos = unproject(lpos.x + dx, lpos.y + dy, lpos.z)
-          if (world.blockExists(npos)) world.getTileEntity(npos) match {
+          if (getWorld.blockExists(npos)) getWorld.getTileEntity(npos) match {
             case s: Screen if s.pitch == pitch && s.yaw == yaw && pending.add(s) => queue += s
             case _ => // Ignore.
           }
@@ -214,7 +220,7 @@ class Screen(var tier: Int) extends traits.TextBuffer with SidedEnvironment with
         }
         if (isClient) {
           val bounds = current.origin.getRenderBoundingBox
-          world.markBlockRangeForRenderUpdate(bounds.minX.toInt, bounds.minY.toInt, bounds.minZ.toInt,
+          getWorld.markBlockRangeForRenderUpdate(bounds.minX.toInt, bounds.minY.toInt, bounds.minZ.toInt,
             bounds.maxX.toInt, bounds.maxY.toInt, bounds.maxZ.toInt)
         }
       }
@@ -248,7 +254,7 @@ class Screen(var tier: Int) extends traits.TextBuffer with SidedEnvironment with
         val hitY = arrow.posY - y
         val hitZ = arrow.posZ - z
         arrow.shootingEntity match {
-          case player: EntityPlayer if player == Minecraft.getMinecraft.thePlayer => click(hitX, hitY, hitZ)
+          case player: EntityPlayer if player == Minecraft.getMinecraft.player => click(hitX, hitY, hitZ)
           case _ =>
         }
       }
@@ -280,32 +286,36 @@ class Screen(var tier: Int) extends traits.TextBuffer with SidedEnvironment with
 
   // ----------------------------------------------------------------------- //
 
+  private final val TierTag = Settings.namespace + "tier"
+  private final val HadRedstoneInputTag = Settings.namespace + "hadRedstoneInput"
+  private final val InvertTouchModeTag = Settings.namespace + "invertTouchMode"
+
   override def readFromNBTForServer(nbt: NBTTagCompound) {
-    tier = nbt.getByte(Settings.namespace + "tier") max 0 min 2
+    tier = nbt.getByte(TierTag) max 0 min 2
     setColor(Color.rgbValues(Color.byTier(tier)))
     super.readFromNBTForServer(nbt)
-    hadRedstoneInput = nbt.getBoolean(Settings.namespace + "hadRedstoneInput")
-    invertTouchMode = nbt.getBoolean(Settings.namespace + "invertTouchMode")
+    hadRedstoneInput = nbt.getBoolean(HadRedstoneInputTag)
+    invertTouchMode = nbt.getBoolean(InvertTouchModeTag)
   }
 
   override def writeToNBTForServer(nbt: NBTTagCompound) {
-    nbt.setByte(Settings.namespace + "tier", tier.toByte)
+    nbt.setByte(TierTag, tier.toByte)
     super.writeToNBTForServer(nbt)
-    nbt.setBoolean(Settings.namespace + "hadRedstoneInput", hadRedstoneInput)
-    nbt.setBoolean(Settings.namespace + "invertTouchMode", invertTouchMode)
+    nbt.setBoolean(HadRedstoneInputTag, hadRedstoneInput)
+    nbt.setBoolean(InvertTouchModeTag, invertTouchMode)
   }
 
   @SideOnly(Side.CLIENT) override
   def readFromNBTForClient(nbt: NBTTagCompound) {
-    tier = nbt.getByte("tier") max 0 min 2
+    tier = nbt.getByte(TierTag) max 0 min 2
     super.readFromNBTForClient(nbt)
-    invertTouchMode = nbt.getBoolean("invertTouchMode")
+    invertTouchMode = nbt.getBoolean(InvertTouchModeTag)
   }
 
   override def writeToNBTForClient(nbt: NBTTagCompound) {
-    nbt.setByte("tier", tier.toByte)
+    nbt.setByte(TierTag, tier.toByte)
     super.writeToNBTForClient(nbt)
-    nbt.setBoolean("invertTouchMode", invertTouchMode)
+    nbt.setBoolean(InvertTouchModeTag, invertTouchMode)
   }
 
   // ----------------------------------------------------------------------- //
@@ -320,8 +330,8 @@ class Screen(var tier: Int) extends traits.TextBuffer with SidedEnvironment with
         val ox = x + (if (spos.x < 0) 1 else 0)
         val oy = y + (if (spos.y < 0) 1 else 0)
         val oz = z + (if (spos.z < 0) 1 else 0)
-        val btmp = AxisAlignedBB.fromBounds(ox, oy, oz, ox + spos.x, oy + spos.y, oz + spos.z)
-        val b = AxisAlignedBB.fromBounds(
+        val btmp = new AxisAlignedBB(ox, oy, oz, ox + spos.x, oy + spos.y, oz + spos.z)
+        val b = new AxisAlignedBB(
           math.min(btmp.minX, btmp.maxX), math.min(btmp.minY, btmp.maxY), math.min(btmp.minZ, btmp.maxZ),
           math.max(btmp.minX, btmp.maxX), math.max(btmp.minY, btmp.maxY), math.max(btmp.minZ, btmp.maxZ))
         cachedBounds = Some(b)
@@ -335,8 +345,8 @@ class Screen(var tier: Int) extends traits.TextBuffer with SidedEnvironment with
 
   override def onAnalyze(player: EntityPlayer, side: EnumFacing, hitX: Float, hitY: Float, hitZ: Float) = Array(origin.node)
 
-  override protected def onRedstoneInputChanged(side: EnumFacing, oldMaxValue: Int, newMaxValue: Int) {
-    super.onRedstoneInputChanged(side, oldMaxValue, newMaxValue)
+  override protected def onRedstoneInputChanged(args: RedstoneChangedEventArgs) {
+    super.onRedstoneInputChanged(args)
     val hasRedstoneInput = screens.map(_.maxInput).max > 0
     if (hasRedstoneInput != hadRedstoneInput) {
       hadRedstoneInput = hasRedstoneInput
@@ -364,7 +374,7 @@ class Screen(var tier: Int) extends traits.TextBuffer with SidedEnvironment with
     val opos = project(origin)
     def tryMergeTowards(dx: Int, dy: Int) = {
       val npos = unproject(opos.x + dx, opos.y + dy, opos.z)
-      world.blockExists(npos) && (world.getTileEntity(npos) match {
+      getWorld.blockExists(npos) && (getWorld.getTileEntity(npos) match {
         case s: Screen if s.tier == tier && s.pitch == pitch && s.getColor == getColor && s.yaw == yaw && !screens.contains(s) =>
           val spos = project(s.origin)
           val canMergeAlongX = spos.y == opos.y && s.height == height && s.width + width <= Settings.get.maxScreenWidth

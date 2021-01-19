@@ -4,13 +4,13 @@ import java.util
 
 import com.google.common.base.Charsets
 import li.cil.oc.Constants
-import li.cil.oc.api.driver.DeviceInfo.DeviceAttribute
-import li.cil.oc.api.driver.DeviceInfo.DeviceClass
 import li.cil.oc.Settings
 import li.cil.oc.api
 import li.cil.oc.api.Network
 import li.cil.oc.api.component.RackBusConnectable
 import li.cil.oc.api.driver.DeviceInfo
+import li.cil.oc.api.driver.DeviceInfo.DeviceAttribute
+import li.cil.oc.api.driver.DeviceInfo.DeviceClass
 import li.cil.oc.api.internal.Rack
 import li.cil.oc.api.machine.Arguments
 import li.cil.oc.api.machine.Callback
@@ -18,6 +18,8 @@ import li.cil.oc.api.machine.Context
 import li.cil.oc.api.network.EnvironmentHost
 import li.cil.oc.api.network._
 import li.cil.oc.api.prefab
+import li.cil.oc.api.prefab.AbstractManagedEnvironment
+import li.cil.oc.common.Tier
 import li.cil.oc.server.{PacketSender => ServerPacketSender}
 import net.minecraft.nbt._
 
@@ -25,21 +27,20 @@ import scala.collection.convert.WrapAsJava._
 import scala.collection.convert.WrapAsScala._
 import scala.collection.mutable
 
-class NetworkCard(val host: EnvironmentHost) extends prefab.ManagedEnvironment with RackBusConnectable with DeviceInfo {
-  protected val visibility = host match {
+class NetworkCard(val host: EnvironmentHost) extends AbstractManagedEnvironment with RackBusConnectable with DeviceInfo with traits.WakeMessageAware {
+  protected val visibility: Visibility = host match {
     case _: Rack => Visibility.Neighbors
     case _ => Visibility.Network
   }
 
-  override val node = Network.newNode(this, visibility).
+  override val node: Component = Network.newNode(this, visibility).
     withComponent("modem", Visibility.Neighbors).
     create()
 
   protected val openPorts = mutable.Set.empty[Int]
-
-  protected var wakeMessage: Option[String] = None
-
-  protected var wakeMessageFuzzy = false
+  
+  // wired network card is the 1st in the max ports list (before both wireless cards)
+  protected def maxOpenPorts = Settings.get.maxOpenPorts(Tier.One)
 
   // ----------------------------------------------------------------------- //
 
@@ -48,7 +49,10 @@ class NetworkCard(val host: EnvironmentHost) extends prefab.ManagedEnvironment w
     DeviceAttribute.Description -> "Ethernet controller",
     DeviceAttribute.Vendor -> Constants.DeviceInfo.DefaultVendor,
     DeviceAttribute.Product -> "42i520 (MPN-01)",
-    DeviceAttribute.Capacity -> Settings.get.maxNetworkPacketSize.toString
+    DeviceAttribute.Version -> "1.0",
+    DeviceAttribute.Capacity -> Settings.get.maxNetworkPacketSize.toString,
+    DeviceAttribute.Size -> maxOpenPorts.toString,
+    DeviceAttribute.Width -> Settings.get.maxNetworkPacketParts.toString
   )
 
   override def getDeviceInfo: util.Map[String, String] = deviceInfo
@@ -59,7 +63,7 @@ class NetworkCard(val host: EnvironmentHost) extends prefab.ManagedEnvironment w
   def open(context: Context, args: Arguments): Array[AnyRef] = {
     val port = checkPort(args.checkInteger(0))
     if (openPorts.contains(port)) result(false)
-    else if (openPorts.size >= Settings.get.maxOpenPorts) {
+    else if (openPorts.size >= maxOpenPorts) {
       throw new java.io.IOException("too many open ports")
     }
     else result(openPorts.add(port))
@@ -84,8 +88,11 @@ class NetworkCard(val host: EnvironmentHost) extends prefab.ManagedEnvironment w
     result(openPorts.contains(port))
   }
 
-  @Callback(direct = true, doc = """function():boolean -- Whether this is a wireless network card.""")
+  @Callback(direct = true, doc = """function():boolean -- Whether this card has wireless networking capability.""")
   def isWireless(context: Context, args: Arguments): Array[AnyRef] = result(false)
+  
+  @Callback(direct = true, doc = """function():boolean -- Whether this card has wired networking capability.""")
+  def isWired(context: Context, args: Arguments): Array[AnyRef] = result(true)
 
   @Callback(doc = """function(address:string, port:number, data...) -- Sends the specified data to the specified target.""")
   def send(context: Context, args: Arguments): Array[AnyRef] = {
@@ -106,34 +113,13 @@ class NetworkCard(val host: EnvironmentHost) extends prefab.ManagedEnvironment w
     result(true)
   }
 
-  // TODO 1.7 Remove, covered by device info now
-  @Callback(direct = true, doc = """function():number -- Gets the maximum packet size (config setting).""")
-  def maxPacketSize(context: Context, args: Arguments): Array[AnyRef] = result(Settings.get.maxNetworkPacketSize)
-
-  @Callback(direct = true, doc = """function():string, boolean -- Get the current wake-up message.""")
-  def getWakeMessage(context: Context, args: Arguments): Array[AnyRef] = result(wakeMessage.orNull, wakeMessageFuzzy)
-
-  @Callback(doc = """function(message:string[, fuzzy:boolean]):string -- Set the wake-up message and whether to ignore additional data/parameters.""")
-  def setWakeMessage(context: Context, args: Arguments): Array[AnyRef] = {
-    val oldMessage = wakeMessage
-    val oldFuzzy = wakeMessageFuzzy
-
-    if (args.optAny(0, null) == null)
-      wakeMessage = None
-    else
-      wakeMessage = Option(args.checkString(0))
-    wakeMessageFuzzy = args.optBoolean(1, wakeMessageFuzzy)
-
-    result(oldMessage.orNull, oldFuzzy)
-  }
-
-  protected def doSend(packet: Packet) = visibility match {
+  protected def doSend(packet: Packet): Unit = visibility match {
     case Visibility.Neighbors => node.sendToNeighbors("network.message", packet)
     case Visibility.Network => node.sendToReachable("network.message", packet)
     case _ => // Ignore.
   }
 
-  protected def doBroadcast(packet: Packet) = visibility match {
+  protected def doBroadcast(packet: Packet): Unit = visibility match {
     case Visibility.Neighbors => node.sendToNeighbors("network.message", packet)
     case Visibility.Network => node.sendToReachable("network.message", packet)
     case _ => // Ignore.
@@ -148,66 +134,49 @@ class NetworkCard(val host: EnvironmentHost) extends prefab.ManagedEnvironment w
     }
   }
 
-  override def onMessage(message: Message) = {
+  override def onMessage(message: Message): Unit = {
     super.onMessage(message)
     if ((message.name == "computer.stopped" || message.name == "computer.started") && node.isNeighborOf(message.source))
       openPorts.clear()
     if (message.name == "network.message") message.data match {
-      case Array(packet: Packet) => receivePacket(packet, 0)
+      case Array(packet: Packet) => receivePacket(packet)
       case _ =>
     }
   }
 
-  protected def receivePacket(packet: Packet, distance: Double) {
-    if (packet.source != node.address && Option(packet.destination).forall(_ == node.address)) {
+  override protected def isPacketAccepted(packet: Packet, distance: Double): Boolean = {
+    if (super.isPacketAccepted(packet, distance)) {
       if (openPorts.contains(packet.port)) {
-        node.sendToReachable("computer.signal", Seq("modem_message", packet.source, Int.box(packet.port), Double.box(distance)) ++ packet.data: _*)
         networkActivity()
-      }
-      // Accept wake-up messages regardless of port because we close all ports
-      // when our computer shuts down.
-      packet.data match {
-        case Array(message: Array[Byte]) if wakeMessage.contains(new String(message, Charsets.UTF_8)) =>
-          node.sendToNeighbors("computer.start")
-        case Array(message: String) if wakeMessage.contains(message) =>
-          node.sendToNeighbors("computer.start")
-        case Array(message: Array[Byte], _*) if wakeMessageFuzzy && wakeMessage.contains(new String(message, Charsets.UTF_8)) =>
-          node.sendToNeighbors("computer.start")
-        case Array(message: String, _*) if wakeMessageFuzzy && wakeMessage.contains(message) =>
-          node.sendToNeighbors("computer.start")
-        case _ =>
+        return true
       }
     }
+    false
   }
 
-  override def receivePacket(packet: Packet): Unit = {
-    receivePacket(packet, 0)
-  }
+  override def receivePacket(packet: Packet): Unit = receivePacket(packet, 0, host)
 
   // ----------------------------------------------------------------------- //
 
+  private final val OpenPortsTag = "openPorts"
+
   override def load(nbt: NBTTagCompound) {
     super.load(nbt)
-
     assert(openPorts.isEmpty)
-    openPorts ++= nbt.getIntArray("openPorts")
-    if (nbt.hasKey("wakeMessage")) {
-      wakeMessage = Option(nbt.getString("wakeMessage"))
-    }
-    wakeMessageFuzzy = nbt.getBoolean("wakeMessageFuzzy")
+    openPorts ++= nbt.getIntArray(OpenPortsTag)
+    loadWakeMessage(nbt)
   }
 
   override def save(nbt: NBTTagCompound) {
     super.save(nbt)
 
-    nbt.setIntArray("openPorts", openPorts.toArray)
-    wakeMessage.foreach(nbt.setString("wakeMessage", _))
-    nbt.setBoolean("wakeMessageFuzzy", wakeMessageFuzzy)
+    nbt.setIntArray(OpenPortsTag, openPorts.toArray)
+    saveWakeMessage(nbt)
   }
 
   // ----------------------------------------------------------------------- //
 
-  protected def checkPort(port: Int) =
+  protected def checkPort(port: Int): Int =
     if (port < 1 || port > 0xFFFF) throw new IllegalArgumentException("invalid port number")
     else port
 

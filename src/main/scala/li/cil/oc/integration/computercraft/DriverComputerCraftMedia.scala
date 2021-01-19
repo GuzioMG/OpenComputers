@@ -16,7 +16,7 @@ import net.minecraft.nbt.NBTTagCompound
 object DriverComputerCraftMedia extends Item {
   override def worksWith(stack: ItemStack) = stack.getItem.isInstanceOf[IMedia]
 
-  override def createEnvironment(stack: ItemStack, host: EnvironmentHost) = {
+  override def createEnvironment(stack: ItemStack, host: EnvironmentHost) = if (!host.world.isRemote) {
     val address = addressFromTag(dataTag(stack))
     val mount = fromComputerCraft(stack.getItem.asInstanceOf[IMedia].createDataMount(stack, host.world))
     Option(oc.api.FileSystem.asManagedEnvironment(mount, new ComputerCraftLabel(stack), host, Settings.resourceDomain + ":floppy_access")) match {
@@ -25,7 +25,7 @@ object DriverComputerCraftMedia extends Item {
         environment
       case _ => null
     }
-  }
+  } else null
 
   def fromComputerCraft(mount: AnyRef): FileSystem = DriverComputerCraftMedia.createFileSystem(mount).orNull
 

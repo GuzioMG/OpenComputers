@@ -17,9 +17,11 @@ import net.minecraft.inventory.Container
 import net.minecraft.item.ItemStack
 import net.minecraft.nbt.CompressedStreamTools
 import net.minecraft.nbt.NBTTagCompound
-import net.minecraft.util.BlockPos
 import net.minecraft.util.EnumFacing
 import net.minecraft.util.EnumParticleTypes
+import net.minecraft.util.ResourceLocation
+import net.minecraft.util.SoundCategory
+import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 import net.minecraftforge.common.MinecraftForge
 
@@ -88,6 +90,15 @@ object PacketSender {
     pb.sendToPlayersNearTileEntity(t)
   }
 
+  def sendMachineItemState(player: EntityPlayerMP, stack: ItemStack, isRunning: Boolean): Unit = {
+    val pb = new SimplePacketBuilder(PacketType.MachineItemStateResponse)
+
+    pb.writeItemStack(stack)
+    pb.writeBoolean(isRunning)
+
+    pb.sendToPlayer(player)
+  }
+
   def sendComputerUserList(t: Computer, list: Array[String]) {
     val pb = new SimplePacketBuilder(PacketType.ComputerUserList)
 
@@ -119,9 +130,9 @@ object PacketSender {
   }
 
   // Avoid spamming the network with disk activity notices.
-  val fileSystemAccessTimeouts = mutable.WeakHashMap.empty[Node, mutable.Map[String, Long]]
+  val fileSystemAccessTimeouts: mutable.WeakHashMap[Node, mutable.Map[String, Long]] = mutable.WeakHashMap.empty[Node, mutable.Map[String, Long]]
 
-  def sendFileSystemActivity(node: Node, host: EnvironmentHost, name: String) = fileSystemAccessTimeouts.synchronized {
+  def sendFileSystemActivity(node: Node, host: EnvironmentHost, name: String): Unit = fileSystemAccessTimeouts.synchronized {
     fileSystemAccessTimeouts.get(node) match {
       case Some(hostTimeouts) if hostTimeouts.getOrElse(name, 0L) > System.currentTimeMillis() => // Cooldown.
       case _ =>
@@ -143,7 +154,7 @@ object PacketSender {
               pb.writeTileEntity(t)
             case _ =>
               pb.writeBoolean(false)
-              pb.writeInt(event.getWorld.provider.getDimensionId)
+              pb.writeInt(event.getWorld.provider.getDimension)
               pb.writeDouble(event.getX)
               pb.writeDouble(event.getY)
               pb.writeDouble(event.getZ)
@@ -154,7 +165,7 @@ object PacketSender {
     }
   }
 
-  def sendNetworkActivity(node: Node, host: EnvironmentHost) = {
+  def sendNetworkActivity(node: Node, host: EnvironmentHost): Unit = {
 
     val event = host match {
       case t: net.minecraft.tileentity.TileEntity => new NetworkActivityEvent.Server(t, node)
@@ -172,7 +183,7 @@ object PacketSender {
           pb.writeTileEntity(t)
         case _ =>
           pb.writeBoolean(false)
-          pb.writeInt(event.getWorld.provider.getDimensionId)
+          pb.writeInt(event.getWorld.provider.getDimension)
           pb.writeDouble(event.getX)
           pb.writeDouble(event.getY)
           pb.writeDouble(event.getZ)
@@ -182,7 +193,7 @@ object PacketSender {
     }
   }
 
-  def sendFloppyChange(t: tileentity.DiskDrive, stack: ItemStack = null) {
+  def sendFloppyChange(t: tileentity.DiskDrive, stack: ItemStack = ItemStack.EMPTY) {
     val pb = new SimplePacketBuilder(PacketType.FloppyChange)
 
     pb.writeTileEntity(t)
@@ -254,8 +265,10 @@ object PacketSender {
       val x = (xz >> 8).toByte
       val z = xz.toByte
       pb.writeShort(xz)
-      pb.writeInt(t.volume(x + z * t.width))
-      pb.writeInt(t.volume(x + z * t.width + t.width * t.width))
+      val rangeStart: Int = x + z * t.width
+      val rangeFinal: Int = x + z * t.width + t.width * t.width
+      pb.writeInt(t.volume(rangeStart max 0 min t.volume.length - 1))
+      pb.writeInt(t.volume(rangeFinal max 0 min t.volume.length - 1))
     }
 
     pb.sendToPlayersNearTileEntity(t)
@@ -265,9 +278,9 @@ object PacketSender {
     val pb = new SimplePacketBuilder(PacketType.HologramTranslation)
 
     pb.writeTileEntity(t)
-    pb.writeDouble(t.translation.xCoord)
-    pb.writeDouble(t.translation.yCoord)
-    pb.writeDouble(t.translation.zCoord)
+    pb.writeDouble(t.translation.x)
+    pb.writeDouble(t.translation.y)
+    pb.writeDouble(t.translation.z)
 
     pb.sendToPlayersNearTileEntity(t)
   }
@@ -373,7 +386,7 @@ object PacketSender {
   def sendParticleEffect(position: BlockPosition, particleType: EnumParticleTypes, count: Int, velocity: Double, direction: Option[EnumFacing] = None): Unit = if (count > 0) {
     val pb = new SimplePacketBuilder(PacketType.ParticleEffect)
 
-    pb.writeInt(position.world.get.provider.getDimensionId)
+    pb.writeInt(position.world.get.provider.getDimension)
     pb.writeInt(position.x)
     pb.writeInt(position.y)
     pb.writeInt(position.z)
@@ -465,7 +478,7 @@ object PacketSender {
 
     pb.writeTileEntity(t)
     for (slot <- 0 until t.getSizeInventory) {
-      pb.writeBoolean(t.getStackInSlot(slot) != null)
+      pb.writeBoolean(!t.getStackInSlot(slot).isEmpty)
     }
 
     pb.sendToPlayersNearTileEntity(t)
@@ -477,7 +490,7 @@ object PacketSender {
     pb.writeTileEntity(t)
     pb.writeBoolean(t.isOutputEnabled)
     for (d <- EnumFacing.values) {
-      pb.writeByte(t.output(d))
+      pb.writeByte(t.getOutput(d))
     }
 
     pb.sendToPlayersNearTileEntity(t)
@@ -496,7 +509,7 @@ object PacketSender {
     val pb = new SimplePacketBuilder(PacketType.RobotMove)
 
     // Custom pb.writeTileEntity() with fake coordinates (valid for the client).
-    pb.writeInt(t.world.provider.getDimensionId)
+    pb.writeInt(t.world.provider.getDimension)
     pb.writeInt(position.getX)
     pb.writeInt(position.getY)
     pb.writeInt(position.getZ)
@@ -543,6 +556,20 @@ object PacketSender {
     pb.sendToPlayersNearTileEntity(t, Option(64))
   }
 
+  def sendRobotNameChange(t: tileentity.Robot) {
+    val pb = new SimplePacketBuilder(PacketType.RobotNameChange)
+
+    pb.writeTileEntity(t.proxy)
+    val name = t.name
+    val len = name.length.toShort
+    pb.writeShort(len)
+    for (x <- 0 until len) {
+      pb.writeChar(name(x))
+    }
+
+    pb.sendToPlayersNearTileEntity(t)
+  }
+
   def sendRobotSelectedSlotChange(t: tileentity.Robot) {
     val pb = new SimplePacketBuilder(PacketType.RobotSelectedSlotChange)
 
@@ -562,7 +589,7 @@ object PacketSender {
     pb.sendToPlayersNearTileEntity(t)
   }
 
-  def sendSwitchActivity(t: tileentity.traits.SwitchLike) {
+  def sendSwitchActivity(t: tileentity.Relay) {
     val pb = new SimplePacketBuilder(PacketType.SwitchActivity)
 
     pb.writeTileEntity(t)
@@ -643,6 +670,33 @@ object PacketSender {
     pb.writeBoolean(vertical)
   }
 
+  def appendTextBufferBitBlt(pb: PacketBuilder, col: Int, row: Int, w: Int, h: Int, owner: String, id: Int, fromCol: Int, fromRow: Int): Unit = {
+    pb.writePacketType(PacketType.TextBufferBitBlt)
+
+    pb.writeInt(col)
+    pb.writeInt(row)
+    pb.writeInt(w)
+    pb.writeInt(h)
+    pb.writeUTF(owner)
+    pb.writeInt(id)
+    pb.writeInt(fromCol)
+    pb.writeInt(fromRow)
+  }
+
+  def appendTextBufferRamInit(pb: PacketBuilder, address: String, id: Int, nbt: NBTTagCompound): Unit = {
+    pb.writePacketType(PacketType.TextBufferRamInit)
+
+    pb.writeUTF(address)
+    pb.writeInt(id)
+    pb.writeNBT(nbt)
+  }
+
+  def appendTextBufferRamDestroy(pb: PacketBuilder, owner: String, id: Int): Unit = {
+    pb.writePacketType(PacketType.TextBufferRamDestroy)
+    pb.writeUTF(owner)
+    pb.writeInt(id)
+  }
+
   def appendTextBufferRawSetText(pb: PacketBuilder, col: Int, row: Int, text: Array[Array[Char]]) {
     pb.writePacketType(PacketType.TextBufferMultiRawSetText)
 
@@ -715,11 +769,25 @@ object PacketSender {
     pb.sendToPlayersNearTileEntity(t)
   }
 
+  def sendSound(world: World, x: Double, y: Double, z: Double, sound: ResourceLocation, category: SoundCategory, range: Double) {
+    val pb = new SimplePacketBuilder(PacketType.SoundEffect)
+
+    pb.writeInt(world.provider.getDimension)
+    pb.writeDouble(x)
+    pb.writeDouble(y)
+    pb.writeDouble(z)
+    pb.writeUTF(sound.toString)
+    pb.writeByte(category.ordinal())
+    pb.writeFloat(range.toFloat)
+
+    pb.sendToNearbyPlayers(world, x, y, z, Option(range))
+  }
+
   def sendSound(world: World, x: Double, y: Double, z: Double, frequency: Int, duration: Int) {
     val pb = new SimplePacketBuilder(PacketType.Sound)
 
     val blockPos = BlockPosition(x, y, z)
-    pb.writeInt(world.provider.getDimensionId)
+    pb.writeInt(world.provider.getDimension)
     pb.writeInt(blockPos.x)
     pb.writeInt(blockPos.y)
     pb.writeInt(blockPos.z)
@@ -733,7 +801,7 @@ object PacketSender {
     val pb = new SimplePacketBuilder(PacketType.SoundPattern)
 
     val blockPos = BlockPosition(x, y, z)
-    pb.writeInt(world.provider.getDimensionId)
+    pb.writeInt(world.provider.getDimension)
     pb.writeInt(blockPos.x)
     pb.writeInt(blockPos.y)
     pb.writeInt(blockPos.z)

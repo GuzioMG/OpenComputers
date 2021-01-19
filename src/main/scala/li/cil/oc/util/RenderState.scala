@@ -4,6 +4,7 @@ import li.cil.oc.OpenComputers
 import li.cil.oc.Settings
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.GlStateManager
+import net.minecraft.client.renderer.GlStateManager.CullFace
 import net.minecraft.client.renderer.RenderHelper
 import org.lwjgl.opengl._
 import org.lwjgl.util.glu.GLU
@@ -68,6 +69,7 @@ object RenderState {
   }
 
   def disableBlend() {
+    GlStateManager.blendFunc(GL11.GL_ONE, GL11.GL_ZERO)
     GlStateManager.disableBlend()
     GL11.glDisable(GL11.GL_BLEND)
   }

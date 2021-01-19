@@ -14,15 +14,17 @@ import li.cil.oc.api.machine.Callback
 import li.cil.oc.api.machine.Context
 import li.cil.oc.api.network.Visibility
 import li.cil.oc.api.prefab
+import li.cil.oc.api.prefab.AbstractManagedEnvironment
 import li.cil.oc.util.DatabaseAccess
 import li.cil.oc.util.ExtendedArguments._
 import li.cil.oc.util.ItemUtils
+import li.cil.oc.util.StackOption
 import net.minecraft.inventory.IInventory
 import net.minecraft.item.ItemStack
 
 import scala.collection.convert.WrapAsJava._
 
-class UpgradeDatabase(val data: IInventory) extends prefab.ManagedEnvironment with internal.Database with DeviceInfo {
+class UpgradeDatabase(val data: IInventory) extends AbstractManagedEnvironment with internal.Database with DeviceInfo {
   override val node = Network.newNode(this, Visibility.Network).
     withComponent("database").
     create()
@@ -39,7 +41,7 @@ class UpgradeDatabase(val data: IInventory) extends prefab.ManagedEnvironment wi
 
   override def size = data.getSizeInventory
 
-  override def getStackInSlot(slot: Int) = Option(data.getStackInSlot(slot)).map(_.copy()).orNull
+  override def getStackInSlot(slot: Int) = StackOption(data.getStackInSlot(slot)).map(_.copy()).orEmpty
 
   override def setStackInSlot(slot: Int, stack: ItemStack) = data.setInventorySlotContents(slot, stack)
 
@@ -64,8 +66,8 @@ class UpgradeDatabase(val data: IInventory) extends prefab.ManagedEnvironment wi
   @Callback(doc = "function(slot:number):boolean -- Clears the specified slot. Returns true if there was something in the slot before.")
   def clear(context: Context, args: Arguments): Array[AnyRef] = {
     val slot = args.checkSlot(data, 0)
-    val nonEmpty = data.getStackInSlot(slot) != null
-    data.setInventorySlotContents(slot, null)
+    val nonEmpty = data.getStackInSlot(slot) != ItemStack.EMPTY // zero size stacks
+    data.setInventorySlotContents(slot, ItemStack.EMPTY)
     result(nonEmpty)
   }
 
@@ -75,7 +77,7 @@ class UpgradeDatabase(val data: IInventory) extends prefab.ManagedEnvironment wi
     val entry = data.getStackInSlot(fromSlot)
     def set(inventory: IInventory) = {
       val toSlot = args.checkSlot(inventory, 1)
-      val nonEmpty = inventory.getStackInSlot(toSlot) != null
+      val nonEmpty = inventory.getStackInSlot(toSlot) != ItemStack.EMPTY // zero size stacks
       inventory.setInventorySlotContents(toSlot, entry.copy())
       result(nonEmpty)
     }

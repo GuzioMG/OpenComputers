@@ -2,9 +2,11 @@ package li.cil.oc.util
 
 import li.cil.oc.api.network.EnvironmentHost
 import net.minecraft.block.Block
+import net.minecraft.block.state.IBlockState
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.tileentity.TileEntity
 import net.minecraft.util.EnumFacing
+import net.minecraft.util.math.BlockPos
 import net.minecraft.world.IBlockAccess
 import net.minecraft.world.World
 
@@ -19,7 +21,7 @@ object ExtendedWorld {
   class ExtendedBlockAccess(val world: IBlockAccess) {
     def getBlock(position: BlockPosition) = world.getBlockState(position.toBlockPos).getBlock
 
-    def getBlockMapColor(position: BlockPosition) = getBlock(position).getMapColor(getBlockMetadata(position))
+    def getBlockMapColor(position: BlockPosition) = getBlockMetadata(position).getMapColor(world, position.toBlockPos)
 
     def getBlockMetadata(position: BlockPosition) = world.getBlockState(position.toBlockPos)
 
@@ -41,7 +43,7 @@ object ExtendedWorld {
 
     def extinguishFire(player: EntityPlayer, position: BlockPosition, side: EnumFacing) = world.extinguishFire(player, position.toBlockPos, side)
 
-    def getBlockHardness(position: BlockPosition) = getBlock(position).getBlockHardness(world, position.toBlockPos)
+    def getBlockHardness(position: BlockPosition) = getBlock(position).getBlockHardness(world.getBlockState(position.toBlockPos), world, position.toBlockPos)
 
     def getBlockHarvestLevel(position: BlockPosition) = getBlock(position).getHarvestLevel(getBlockMetadata(position))
 
@@ -53,15 +55,19 @@ object ExtendedWorld {
 
     def getIndirectPowerLevelTo(position: BlockPosition, side: EnumFacing) = world.getRedstonePower(position.toBlockPos, side)
 
-    def markBlockForUpdate(position: BlockPosition) = world.markBlockForUpdate(position.toBlockPos)
+    def notifyBlockUpdate(pos: BlockPos): Unit = world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 3)
 
-    def notifyBlockOfNeighborChange(position: BlockPosition, block: Block) = world.notifyBlockOfStateChange(position.toBlockPos, block)
+    def notifyBlockUpdate(position: BlockPosition): Unit = notifyBlockUpdate(position, world.getBlockState(position.toBlockPos), world.getBlockState(position.toBlockPos))
 
-    def notifyBlocksOfNeighborChange(position: BlockPosition, block: Block) = world.notifyNeighborsOfStateChange(position.toBlockPos, block)
+    def notifyBlockUpdate(position: BlockPosition, oldState: IBlockState, newState: IBlockState, flags: Int = 3): Unit = world.notifyBlockUpdate(position.toBlockPos, oldState, newState, flags)
+
+    def notifyBlockOfNeighborChange(position: BlockPosition, block: Block) = world.neighborChanged(position.toBlockPos, block, position.toBlockPos)
+
+    def notifyBlocksOfNeighborChange(position: BlockPosition, block: Block, updateObservers: Boolean) = world.notifyNeighborsOfStateChange(position.toBlockPos, block, updateObservers)
 
     def notifyBlocksOfNeighborChange(position: BlockPosition, block: Block, side: EnumFacing) = world.notifyNeighborsOfStateExcept(position.toBlockPos, block, side)
 
-    def playAuxSFX(id: Int, position: BlockPosition, data: Int) = world.playAuxSFX(id, position.toBlockPos, data)
+    def playAuxSFX(id: Int, position: BlockPosition, data: Int) = world.playEvent(id, position.toBlockPos, data)
 
     def setBlock(position: BlockPosition, block: Block) = world.setBlockState(position.toBlockPos, block.getDefaultState)
 

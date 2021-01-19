@@ -11,8 +11,8 @@ import org.lwjgl.opengl.GL11
 
 object AssemblerRenderer extends TileEntitySpecialRenderer[Assembler] {
 
-  override def renderTileEntityAt(assembler: Assembler, x: Double, y: Double, z: Double, f: Float, damage: Int) {
-    RenderState.checkError(getClass.getName + ".renderTileEntityAt: entering (aka: wasntme)")
+  override def render(assembler: Assembler, x: Double, y: Double, z: Double, f: Float, damage: Int, alpha: Float) {
+    RenderState.checkError(getClass.getName + ".render: entering (aka: wasntme)")
 
     RenderState.pushAttrib()
 
@@ -24,7 +24,7 @@ object AssemblerRenderer extends TileEntitySpecialRenderer[Assembler] {
     GlStateManager.translate(x + 0.5, y + 0.5, z + 0.5)
 
     val t = Tessellator.getInstance
-    val r = t.getWorldRenderer
+    val r = t.getBuffer
 
     Textures.Block.bind()
     r.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX)
@@ -71,6 +71,6 @@ object AssemblerRenderer extends TileEntitySpecialRenderer[Assembler] {
     GlStateManager.popMatrix()
     RenderState.popAttrib()
 
-    RenderState.checkError(getClass.getName + ".renderTileEntityAt: leaving")
+    RenderState.checkError(getClass.getName + ".render: leaving")
   }
 }

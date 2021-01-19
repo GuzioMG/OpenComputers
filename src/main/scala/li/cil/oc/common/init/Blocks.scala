@@ -6,40 +6,39 @@ import li.cil.oc.common.Tier
 import li.cil.oc.common.block._
 import li.cil.oc.common.recipe.Recipes
 import li.cil.oc.common.tileentity
+import net.minecraft.tileentity.TileEntity
 import net.minecraftforge.fml.common.registry.GameRegistry
 
 object Blocks {
   def init() {
-    GameRegistry.registerTileEntity(classOf[tileentity.AccessPoint], Settings.namespace + "accessPoint")
-    GameRegistry.registerTileEntity(classOf[tileentity.Adapter], Settings.namespace + "adapter")
-    GameRegistry.registerTileEntity(classOf[tileentity.Assembler], Settings.namespace + "assembler")
-    GameRegistry.registerTileEntity(classOf[tileentity.Cable], Settings.namespace + "cable")
-    GameRegistry.registerTileEntity(classOf[tileentity.Capacitor], Settings.namespace + "capacitor")
-    GameRegistry.registerTileEntity(classOf[tileentity.Case], Settings.namespace + "case")
-    GameRegistry.registerTileEntity(classOf[tileentity.Charger], Settings.namespace + "charger")
-    GameRegistry.registerTileEntity(classOf[tileentity.DiskDrive], Settings.namespace + "diskDrive")
-    GameRegistry.registerTileEntity(classOf[tileentity.Disassembler], Settings.namespace + "disassembler")
-    GameRegistry.registerTileEntity(classOf[tileentity.Keyboard], Settings.namespace + "keyboard")
-    GameRegistry.registerTileEntity(classOf[tileentity.Hologram], Settings.namespace + "hologram")
-    GameRegistry.registerTileEntity(classOf[tileentity.Geolyzer], Settings.namespace + "geolyzer")
-    GameRegistry.registerTileEntity(classOf[tileentity.Microcontroller], Settings.namespace + "microcontroller")
-    GameRegistry.registerTileEntity(classOf[tileentity.MotionSensor], Settings.namespace + "motionSensor")
-    GameRegistry.registerTileEntity(classOf[tileentity.NetSplitter], Settings.namespace + "netSplitter")
-    GameRegistry.registerTileEntity(classOf[tileentity.PowerConverter], Settings.namespace + "powerConverter")
-    GameRegistry.registerTileEntity(classOf[tileentity.PowerDistributor], Settings.namespace + "powerDistributor")
-    GameRegistry.registerTileEntity(classOf[tileentity.Print], Settings.namespace + "print")
-    GameRegistry.registerTileEntity(classOf[tileentity.Printer], Settings.namespace + "printer")
-    GameRegistry.registerTileEntity(classOf[tileentity.Raid], Settings.namespace + "raid")
-    GameRegistry.registerTileEntity(classOf[tileentity.Redstone], Settings.namespace + "redstone")
-    GameRegistry.registerTileEntity(classOf[tileentity.Relay], Settings.namespace + "relay")
-    GameRegistry.registerTileEntity(classOf[tileentity.RobotProxy], Settings.namespace + "robot")
-    GameRegistry.registerTileEntity(classOf[tileentity.Switch], Settings.namespace + "switch")
-    GameRegistry.registerTileEntity(classOf[tileentity.Screen], Settings.namespace + "screen")
-    GameRegistry.registerTileEntityWithAlternatives(classOf[tileentity.Rack], Settings.namespace + "rack", Settings.namespace + "serverRack")
-    GameRegistry.registerTileEntity(classOf[tileentity.Transposer], Settings.namespace + "transposer")
-    GameRegistry.registerTileEntity(classOf[tileentity.Waypoint], Settings.namespace + "waypoint")
+    registerTileEntity(classOf[tileentity.Adapter], Settings.namespace + "adapter")
+    registerTileEntity(classOf[tileentity.Assembler], Settings.namespace + "assembler")
+    registerTileEntity(classOf[tileentity.Cable], Settings.namespace + "cable")
+    registerTileEntity(classOf[tileentity.Capacitor], Settings.namespace + "capacitor")
+    registerTileEntity(classOf[tileentity.CarpetedCapacitor], Settings.namespace + "carpetedCapacitor")
+    registerTileEntity(classOf[tileentity.Case], Settings.namespace + "case")
+    registerTileEntity(classOf[tileentity.Charger], Settings.namespace + "charger")
+    registerTileEntity(classOf[tileentity.DiskDrive], Settings.namespace + "diskDrive")
+    registerTileEntity(classOf[tileentity.Disassembler], Settings.namespace + "disassembler")
+    registerTileEntity(classOf[tileentity.Keyboard], Settings.namespace + "keyboard")
+    registerTileEntity(classOf[tileentity.Hologram], Settings.namespace + "hologram")
+    registerTileEntity(classOf[tileentity.Geolyzer], Settings.namespace + "geolyzer")
+    registerTileEntity(classOf[tileentity.Microcontroller], Settings.namespace + "microcontroller")
+    registerTileEntity(classOf[tileentity.MotionSensor], Settings.namespace + "motionSensor")
+    registerTileEntity(classOf[tileentity.NetSplitter], Settings.namespace + "netSplitter")
+    registerTileEntity(classOf[tileentity.PowerConverter], Settings.namespace + "powerConverter")
+    registerTileEntity(classOf[tileentity.PowerDistributor], Settings.namespace + "powerDistributor")
+    registerTileEntity(classOf[tileentity.Print], Settings.namespace + "print")
+    registerTileEntity(classOf[tileentity.Printer], Settings.namespace + "printer")
+    registerTileEntity(classOf[tileentity.Raid], Settings.namespace + "raid")
+    registerTileEntity(classOf[tileentity.Redstone], Settings.namespace + "redstone")
+    registerTileEntity(classOf[tileentity.Relay], Settings.namespace + "relay")
+    registerTileEntity(classOf[tileentity.RobotProxy], Settings.namespace + "robot")
+    registerTileEntity(classOf[tileentity.Screen], Settings.namespace + "screen")
+    registerTileEntity(classOf[tileentity.Rack], Settings.namespace + "rack")
+    registerTileEntity(classOf[tileentity.Transposer], Settings.namespace + "transposer")
+    registerTileEntity(classOf[tileentity.Waypoint], Settings.namespace + "waypoint")
 
-    Items.registerBlock(new AccessPoint(), Constants.BlockName.AccessPoint)
     Recipes.addBlock(new Adapter(), Constants.BlockName.Adapter, "oc:adapter")
     Recipes.addBlock(new Assembler(), Constants.BlockName.Assembler, "oc:assembler")
     Recipes.addBlock(new Cable(), Constants.BlockName.Cable, "oc:cable")
@@ -66,7 +65,6 @@ object Blocks {
     Recipes.addBlock(new Screen(Tier.Three), Constants.BlockName.ScreenTier3, "oc:screen3")
     Recipes.addBlock(new Screen(Tier.Two), Constants.BlockName.ScreenTier2, "oc:screen2")
     Recipes.addBlock(new Rack(), Constants.BlockName.Rack, "oc:rack", "oc:rack")
-    Items.registerBlock(new Switch(), Constants.BlockName.Switch)
     Recipes.addBlock(new Waypoint(), Constants.BlockName.Waypoint, "oc:waypoint")
 
     Items.registerBlock(new Case(Tier.Four), Constants.BlockName.CaseCreative)
@@ -83,5 +81,12 @@ object Blocks {
 
     // v1.5.16
     Recipes.addBlock(new Transposer(), Constants.BlockName.Transposer, "oc:transposer")
+
+    // v1.7.2
+    Recipes.addBlock(new CarpetedCapacitor(), Constants.BlockName.CarpetedCapacitor, "oc:carpetedCapacitor")
+  }
+
+  private def registerTileEntity(tileEntityClass: Class[_ <: TileEntity], key: String): Unit = {
+    GameRegistry.registerTileEntity(tileEntityClass, key)
   }
 }

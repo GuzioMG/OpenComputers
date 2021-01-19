@@ -12,6 +12,7 @@ import li.cil.oc.client.Textures
 import li.cil.oc.common.tileentity.Hologram
 import li.cil.oc.util.RenderState
 import net.minecraft.client.renderer.GlStateManager
+import net.minecraft.client.renderer.GlStateManager.CullFace
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer
 import net.minecraft.tileentity.TileEntity
 import net.minecraft.util.EnumFacing
@@ -64,14 +65,14 @@ object HologramRenderer extends TileEntitySpecialRenderer[Hologram] with Callabl
    */
   private var failed = false
 
-  override def renderTileEntityAt(hologram: Hologram, x: Double, y: Double, z: Double, f: Float, damage: Int) {
+  override def render(hologram: Hologram, x: Double, y: Double, z: Double, f: Float, damage: Int, alpha: Float) {
     if (failed) {
-      HologramRendererFallback.renderTileEntityAt(hologram, x, y, z, f, damage)
+      HologramRendererFallback.render(hologram, x, y, z, f, damage, alpha)
       return
     }
 
     this.hologram = hologram
-    RenderState.checkError(getClass.getName + ".renderTileEntityAt: entering (aka: wasntme)")
+    RenderState.checkError(getClass.getName + ".render: entering (aka: wasntme)")
 
     if (!hologram.hasPower) return
 
@@ -105,9 +106,9 @@ object HologramRenderer extends TileEntitySpecialRenderer[Hologram] with Callabl
 
     GlStateManager.scale(1.001, 1.001, 1.001) // Avoid z-fighting with other blocks.
     GlStateManager.translate(
-      (hologram.translation.xCoord * hologram.width / 16 - 1.5) * hologram.scale,
-      hologram.translation.yCoord * hologram.height / 16 * hologram.scale,
-      (hologram.translation.zCoord * hologram.width / 16 - 1.5) * hologram.scale)
+      (hologram.translation.x * hologram.width / 16 - 1.5) * hologram.scale,
+      hologram.translation.y * hologram.height / 16 * hologram.scale,
+      (hologram.translation.z * hologram.width / 16 - 1.5) * hologram.scale)
 
     // Do a bit of flickering, because that's what holograms do!
     if (Settings.get.hologramFlickerFrequency > 0 && random.nextDouble() < Settings.get.hologramFlickerFrequency) {
@@ -133,7 +134,7 @@ object HologramRenderer extends TileEntitySpecialRenderer[Hologram] with Callabl
     else {
       // Camera is outside the hologram.
       GlStateManager.enableCull()
-      GlStateManager.cullFace(GL11.GL_BACK)
+      GlStateManager.cullFace(CullFace.BACK)
     }
 
     // We do two passes here to avoid weird transparency effects: in the first
@@ -148,15 +149,15 @@ object HologramRenderer extends TileEntitySpecialRenderer[Hologram] with Callabl
     GlStateManager.colorMask(true, true, true, true)
     GlStateManager.depthFunc(GL11.GL_EQUAL)
     draw(glBuffer)
-
     GlStateManager.depthFunc(GL11.GL_LEQUAL)
+
     GlStateManager.popMatrix()
 
     RenderState.disableBlend()
     RenderState.popAttrib()
     GL11.glPopClientAttrib()
 
-    RenderState.checkError(getClass.getName + ".renderTileEntityAt: leaving")
+    RenderState.checkError(getClass.getName + ".render: leaving")
   }
 
   def draw(glBuffer: Int) {

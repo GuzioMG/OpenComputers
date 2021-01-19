@@ -10,20 +10,46 @@ import com.google.common.base.Strings
 import com.google.common.io.PatternFilenameFilter
 import li.cil.oc.OpenComputers
 import li.cil.oc.Settings
+import li.cil.oc.api
+import li.cil.oc.api.machine.Architecture
 import li.cil.oc.server.machine.Machine
 import li.cil.oc.util.ExtendedLuaState._
 import li.cil.repack.com.naef.jnlua
 import li.cil.repack.com.naef.jnlua.NativeSupport.Loader
+import net.minecraft.item.ItemStack
 import org.apache.commons.lang3.SystemUtils
 
 import scala.util.Random
 
 object LuaStateFactory {
-  def isAvailable = {
+  def isAvailable: Boolean = {
     // Force initialization of both.
     val lua52 = Lua52.isAvailable
     val lua53 = Lua53.isAvailable
     lua52 || lua53
+  }
+
+  def luajRequested: Boolean = Settings.get.forceLuaJ || Settings.get.registerLuaJArchitecture
+
+  def includeLuaJ: Boolean = !isAvailable || luajRequested
+
+  def include52: Boolean = Lua52.isAvailable && !Settings.get.forceLuaJ
+
+  def include53: Boolean = Lua53.isAvailable && Settings.get.enableLua53 && !Settings.get.forceLuaJ
+
+  def default53: Boolean = include53 && Settings.get.defaultLua53
+
+  def setDefaultArch(stack: ItemStack): ItemStack = {
+    if (default53) {
+      val lua53: Class[_ <: Architecture] = classOf[NativeLua53Architecture]
+      Option(api.Driver.driverFor(stack)).foreach{
+        case driver: api.driver.item.MutableProcessor => {
+          driver.setArchitecture(stack, lua53)
+        }
+        case _ =>
+      }
+    }
+    stack
   }
 
   object Lua52 extends LuaStateFactory {

@@ -11,7 +11,7 @@ import li.cil.oc.common.item.data.MicrocontrollerData
 import li.cil.oc.common.item.data.PrintData
 import li.cil.oc.common.item.data.RobotData
 import li.cil.oc.common.item.data.TabletData
-import li.cil.oc.integration.Mods
+import li.cil.oc.server.machine.luac.LuaStateFactory
 import li.cil.oc.util.Color
 import li.cil.oc.util.ExtendedNBT._
 import li.cil.oc.util.SideTracker
@@ -37,11 +37,18 @@ object ExtendedRecipe {
     api.Items.get(Constants.ItemName.HDDTier2),
     api.Items.get(Constants.ItemName.HDDTier3)
   )
+  private lazy val cpus = Array(
+    api.Items.get(Constants.ItemName.CPUTier1),
+    api.Items.get(Constants.ItemName.CPUTier2),
+    api.Items.get(Constants.ItemName.CPUTier3),
+    api.Items.get(Constants.ItemName.APUTier1),
+    api.Items.get(Constants.ItemName.APUTier2)
+  )
   private lazy val robot = api.Items.get(Constants.BlockName.Robot)
   private lazy val tablet = api.Items.get(Constants.ItemName.Tablet)
   private lazy val print = api.Items.get(Constants.BlockName.Print)
   private lazy val disabled = {
-    val stack = new ItemStack(Blocks.dirt)
+    val stack = new ItemStack(Blocks.DIRT)
     val tag = new NBTTagCompound()
     tag.setNewCompoundTag("display", _.setNewTagList("Lore", "Autocrafting of this item is disabled to avoid exploits."))
     stack.setTagCompound(tag)
@@ -49,10 +56,12 @@ object ExtendedRecipe {
   }
 
   def addNBTToResult(recipe: IRecipe, craftedStack: ItemStack, inventory: InventoryCrafting): ItemStack = {
-    if (api.Items.get(craftedStack) == navigationUpgrade) {
+    val craftedItemName = api.Items.get(craftedStack)
+
+    if (craftedItemName == navigationUpgrade) {
       Option(api.Driver.driverFor(craftedStack)).foreach(driver =>
         for (stack <- getItems(inventory)) {
-          if (stack.getItem == net.minecraft.init.Items.filled_map) {
+          if (stack.getItem == net.minecraft.init.Items.FILLED_MAP) {
             // Store information of the map used for crafting in the result.
             val nbt = driver.dataTag(craftedStack)
             nbt.setNewCompoundTag(Settings.namespace + "map", stack.writeToNBT)
@@ -60,8 +69,7 @@ object ExtendedRecipe {
         })
     }
 
-    if (api.Items.get(craftedStack) == linkedCard) {
-      if (weAreBeingCalledFromAppliedEnergistics2) return disabled.copy()
+    if (craftedItemName == linkedCard) {
       if (SideTracker.isServer) {
         Option(api.Driver.driverFor(craftedStack)).foreach(driver => {
           val nbt = driver.dataTag(craftedStack)
@@ -70,12 +78,16 @@ object ExtendedRecipe {
       }
     }
 
-    if (api.Items.get(craftedStack) == floppy || hdds.contains(api.Items.get(craftedStack))) {
+    if (cpus.contains(craftedItemName)) {
+      LuaStateFactory.setDefaultArch(craftedStack)
+    }
+
+    if (craftedItemName == floppy || hdds.contains(craftedItemName)) {
       if (!craftedStack.hasTagCompound) {
         craftedStack.setTagCompound(new NBTTagCompound())
       }
       val nbt = craftedStack.getTagCompound
-      if (recipe.getRecipeSize == 1) {
+      if (recipe.canFit(1, 1)) {
         // Formatting / loot to normal disk conversion, only keep coloring.
         val colorKey = Settings.namespace + "color"
         for (stack <- getItems(inventory)) {
@@ -103,10 +115,9 @@ object ExtendedRecipe {
       }
     }
 
-    if (api.Items.get(craftedStack) == print &&
+    if (craftedItemName == print &&
       recipe.isInstanceOf[ExtendedShapelessOreRecipe] &&
-      recipe.asInstanceOf[ExtendedShapelessOreRecipe].getInput != null &&
-      recipe.asInstanceOf[ExtendedShapelessOreRecipe].getInput.size == 2) {
+      recipe.asInstanceOf[ExtendedShapelessOreRecipe].getIngredients.size == 2) {
       // First, copy old data.
       val data = new PrintData(craftedStack)
       val inputs = getItems(inventory)
@@ -118,33 +129,33 @@ object ExtendedRecipe {
 
       // Then apply new data.
       val beaconBlocks = Array(
-        new ItemStack(net.minecraft.init.Blocks.iron_block),
-        new ItemStack(net.minecraft.init.Blocks.gold_block),
-        new ItemStack(net.minecraft.init.Blocks.emerald_block),
-        new ItemStack(net.minecraft.init.Blocks.diamond_block)
+        new ItemStack(net.minecraft.init.Blocks.IRON_BLOCK),
+        new ItemStack(net.minecraft.init.Blocks.GOLD_BLOCK),
+        new ItemStack(net.minecraft.init.Blocks.EMERALD_BLOCK),
+        new ItemStack(net.minecraft.init.Blocks.DIAMOND_BLOCK)
       )
 
-      val glowstoneDust = new ItemStack(net.minecraft.init.Items.glowstone_dust)
-      val glowstone = new ItemStack(net.minecraft.init.Blocks.glowstone)
+      val glowstoneDust = new ItemStack(net.minecraft.init.Items.GLOWSTONE_DUST)
+      val glowstone = new ItemStack(net.minecraft.init.Blocks.GLOWSTONE)
       for (stack <- inputs) {
         if (beaconBlocks.exists(_.isItemEqual(stack))) {
           if (data.isBeaconBase) {
             // Crafting wouldn't change anything, prevent accidental resource loss.
-            return null
+            return ItemStack.EMPTY
           }
           data.isBeaconBase = true
         }
         if (glowstoneDust.isItemEqual(stack)) {
           if (data.lightLevel == 15) {
             // Crafting wouldn't change anything, prevent accidental resource loss.
-            return null
+            return ItemStack.EMPTY
           }
           data.lightLevel = math.min(15, data.lightLevel + 1)
         }
         if (glowstone.isItemEqual(stack)) {
           if (data.lightLevel == 15) {
             // Crafting wouldn't change anything, prevent accidental resource loss.
-            return null
+            return ItemStack.EMPTY
           }
           data.lightLevel = math.min(15, data.lightLevel + 4)
         }
@@ -155,11 +166,10 @@ object ExtendedRecipe {
     }
 
     // EEPROM copying.
-    if (api.Items.get(craftedStack) == eeprom &&
-      craftedStack.stackSize == 2 &&
+    if (craftedItemName == eeprom &&
+      craftedStack.getCount == 2 &&
       recipe.isInstanceOf[ExtendedShapelessOreRecipe] &&
-      recipe.asInstanceOf[ExtendedShapelessOreRecipe].getInput != null &&
-      recipe.asInstanceOf[ExtendedShapelessOreRecipe].getInput.size == 2) breakable {
+      recipe.asInstanceOf[ExtendedShapelessOreRecipe].getIngredients.size == 2) breakable {
       for (stack <- getItems(inventory)) {
         if (api.Items.get(stack) == eeprom && stack.hasTagCompound) {
           val copy = stack.getTagCompound.copy.asInstanceOf[NBTTagCompound]
@@ -180,7 +190,7 @@ object ExtendedRecipe {
     craftedStack
   }
 
-  private def getItems(inventory: InventoryCrafting) = (0 until inventory.getSizeInventory).map(inventory.getStackInSlot).filter(_ != null)
+  private def getItems(inventory: InventoryCrafting) = (0 until inventory.getSizeInventory).map(inventory.getStackInSlot).filter(!_.isEmpty)
 
   private def recraft(craftedStack: ItemStack, inventory: InventoryCrafting, descriptor: ItemInfo, dataFactory: (ItemStack) => ItemDataWrapper) {
     if (api.Items.get(craftedStack) == descriptor) {
@@ -196,7 +206,7 @@ object ExtendedRecipe {
           // Insert new EEPROM.
           for (stack <- getItems(inventory)) {
             if (api.Items.get(stack) == eeprom) {
-              data.components :+= stack
+              data.components :+= stack.copy.splitStack(1)
             }
           }
 
@@ -205,8 +215,6 @@ object ExtendedRecipe {
       }
     }
   }
-
-  private def weAreBeingCalledFromAppliedEnergistics2 = Mods.AppliedEnergistics2.isAvailable && new Exception().getStackTrace.exists(_.getClassName == "appeng.container.implementations.ContainerPatternTerm")
 
   private trait ItemDataWrapper {
     def components: Array[ItemStack]
@@ -219,40 +227,40 @@ object ExtendedRecipe {
   private class MCUDataWrapper(val stack: ItemStack) extends ItemDataWrapper {
     val data = new MicrocontrollerData(stack)
 
-    override def components = data.components
+    override def components: Array[ItemStack] = data.components
 
-    override def components_=(value: Array[ItemStack]) = data.components = value
+    override def components_=(value: Array[ItemStack]): Unit = data.components = value
 
-    override def save(stack: ItemStack) = data.save(stack)
+    override def save(stack: ItemStack): Unit = data.save(stack)
   }
 
   private class DroneDataWrapper(val stack: ItemStack) extends ItemDataWrapper {
     val data = new DroneData(stack)
 
-    override def components = data.components
+    override def components: Array[ItemStack] = data.components
 
-    override def components_=(value: Array[ItemStack]) = data.components = value
+    override def components_=(value: Array[ItemStack]): Unit = data.components = value
 
-    override def save(stack: ItemStack) = data.save(stack)
+    override def save(stack: ItemStack): Unit = data.save(stack)
   }
 
   private class RobotDataWrapper(val stack: ItemStack) extends ItemDataWrapper {
     val data = new RobotData(stack)
 
-    override def components = data.components
+    override def components: Array[ItemStack] = data.components
 
-    override def components_=(value: Array[ItemStack]) = data.components = value
+    override def components_=(value: Array[ItemStack]): Unit = data.components = value
 
-    override def save(stack: ItemStack) = data.save(stack)
+    override def save(stack: ItemStack): Unit = data.save(stack)
   }
 
   private class TabletDataWrapper(val stack: ItemStack) extends ItemDataWrapper {
     val data = new TabletData(stack)
 
-    var components = data.items.collect { case Some(item) => item }
+    var components: Array[ItemStack] = data.items.filter(!_.isEmpty)
 
-    override def save(stack: ItemStack) = {
-      data.items = components.map(stack => Option(stack))
+    override def save(stack: ItemStack): Unit = {
+      data.items = components.clone()
       data.save(stack)
     }
   }

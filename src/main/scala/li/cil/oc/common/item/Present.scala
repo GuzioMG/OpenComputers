@@ -8,7 +8,11 @@ import li.cil.oc.api
 import li.cil.oc.util.InventoryUtils
 import li.cil.oc.util.ItemUtils
 import net.minecraft.entity.player.EntityPlayer
+import net.minecraft.init.SoundEvents
 import net.minecraft.item.ItemStack
+import net.minecraft.util.ActionResult
+import net.minecraft.util.EnumActionResult
+import net.minecraft.util.SoundCategory
 import net.minecraft.world.World
 
 import scala.collection.mutable
@@ -16,16 +20,16 @@ import scala.collection.mutable
 class Present(val parent: Delegator) extends traits.Delegate {
   showInItemList = false
 
-  override def onItemRightClick(stack: ItemStack, world: World, player: EntityPlayer) = {
-    if (stack.stackSize > 0) {
-      stack.stackSize -= 1
+  override def onItemRightClick(stack: ItemStack, world: World, player: EntityPlayer): ActionResult[ItemStack] = {
+    if (stack.getCount > 0) {
+      stack.shrink(1)
       if (!world.isRemote) {
-        world.playSoundAtEntity(player, "random.levelup", 0.2f, 1f)
+        world.playSound(player, player.posX, player.posY, player.posZ, SoundEvents.ENTITY_PLAYER_LEVELUP, SoundCategory.MASTER, 0.2f, 1f)
         val present = Present.nextPresent()
         InventoryUtils.addToPlayerInventory(present, player)
       }
     }
-    stack
+    ActionResult.newResult(EnumActionResult.SUCCESS, stack)
   }
 }
 
@@ -72,6 +76,7 @@ object Present {
     add(Constants.ItemName.Alu, 45)
     add(Constants.ItemName.BatteryUpgradeTier1, 43)
     add(Constants.ItemName.NetworkCard, 38)
+    add(Constants.ItemName.WirelessNetworkCardTier1, 37)
     add(Constants.ItemName.HDDTier1, 36)
     add(Constants.ItemName.GeneratorUpgrade, 35)
     add(Constants.ItemName.CPUTier1, 31)
@@ -86,7 +91,7 @@ object Present {
     add(Constants.ItemName.ChipTier2, 15)
     add(Constants.ItemName.ComponentBusTier1, 13)
     add(Constants.ItemName.BatteryUpgradeTier2, 12)
-    add(Constants.ItemName.WirelessNetworkCard, 11)
+    add(Constants.ItemName.WirelessNetworkCardTier2, 11)
     add(Constants.ItemName.RAMTier3, 10)
     add(Constants.ItemName.ServerTier1, 10)
     add(Constants.ItemName.InternetCard, 9)
@@ -129,5 +134,5 @@ object Present {
 
   private val rng = new Random()
 
-  def nextPresent() = Presents(rng.nextInt(Presents.length)).copy()
+  def nextPresent(): ItemStack = Presents(rng.nextInt(Presents.length)).copy()
 }

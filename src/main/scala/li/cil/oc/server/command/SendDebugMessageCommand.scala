@@ -5,13 +5,14 @@ import li.cil.oc.common.command.SimpleCommand
 import li.cil.oc.server.network.DebugNetwork
 import net.minecraft.command.ICommandSender
 import net.minecraft.command.WrongUsageException
+import net.minecraft.server.MinecraftServer
 
 object SendDebugMessageCommand extends SimpleCommand("oc_sendDebugMessage") {
   aliases += "oc_sdbg"
 
-  override def getCommandUsage(sender: ICommandSender): String = name + "<destinationAddress> [message...]"
+  override def getUsage(sender: ICommandSender): String = name + "<destinationAddress> [message...]"
 
-  override def processCommand(sender: ICommandSender, args: Array[String]): Unit = {
+  override def execute(server: MinecraftServer, sender: ICommandSender, args: Array[String]): Unit = {
     if (args == null || args.length == 0) {
       throw new WrongUsageException("no destination address specified.")
     }

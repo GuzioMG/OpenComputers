@@ -14,7 +14,9 @@ import li.cil.oc.api.network.Message
 import li.cil.oc.api.network.Node
 import li.cil.oc.api.network.Packet
 import li.cil.oc.api.network.Visibility
+import li.cil.oc.api.util.StateAware
 import li.cil.oc.common.Slot
+import li.cil.oc.common.tileentity.traits.RedstoneChangedEventArgs
 import li.cil.oc.integration.opencomputers.DriverRedstoneCard
 import li.cil.oc.server.{PacketSender => ServerPacketSender}
 import li.cil.oc.util.ExtendedInventory._
@@ -30,9 +32,9 @@ import net.minecraftforge.fml.relauncher.Side
 import net.minecraftforge.fml.relauncher.SideOnly
 
 class Rack extends traits.PowerAcceptor with traits.Hub with traits.PowerBalancer with traits.ComponentInventory with traits.Rotatable with traits.BundledRedstoneAware with Analyzable with internal.Rack with traits.StateAware {
-  var isRelayEnabled = true
+  var isRelayEnabled = false
   val lastData = new Array[NBTTagCompound](getSizeInventory)
-  val hasChanged = Array.fill(getSizeInventory)(true)
+  val hasChanged: Array[Boolean] = Array.fill(getSizeInventory)(true)
 
   // Map node connections for each installed mountable. Each mountable may
   // have up to four outgoing connections, with the first one always being
@@ -41,8 +43,8 @@ class Rack extends traits.PowerAcceptor with traits.Hub with traits.PowerBalance
   // The other nodes are "secondary" connections and merely transfer network
   // messages.
   // mountable -> connectable -> side
-  val nodeMapping = Array.fill(getSizeInventory)(Array.fill[Option[EnumFacing]](4)(None))
-  val snifferNodes = Array.fill(getSizeInventory)(Array.fill(3)(api.Network.newNode(this, Visibility.Neighbors).create()))
+  val nodeMapping: Array[Array[Option[EnumFacing]]] = Array.fill(getSizeInventory)(Array.fill[Option[EnumFacing]](4)(None))
+  val snifferNodes: Array[Array[Node]] = Array.fill(getSizeInventory)(Array.fill(3)(api.Network.newNode(this, Visibility.Neighbors).create()))
 
   def connect(slot: Int, connectableIndex: Int, side: Option[EnumFacing]): Unit = {
     val newSide = side match {
@@ -123,12 +125,7 @@ class Rack extends traits.PowerAcceptor with traits.Hub with traits.PowerBalance
     }
   }
 
-  // ----------------------------------------------------------------------- //
-  // Hub
-
-  override protected def relayPacket(sourceSide: Option[EnumFacing], packet: Packet): Unit = {
-    if (isRelayEnabled) super.relayPacket(sourceSide, packet)
-
+  protected def sendPacketToMountables(sourceSide: Option[EnumFacing], packet: Packet): Unit = {
     // When a message arrives on a bus, also send it to all secondary nodes
     // connected to it. Only deliver it to that very node, if it's not the
     // sender, to avoid loops.
@@ -148,6 +145,22 @@ class Rack extends traits.PowerAcceptor with traits.Hub with traits.PowerBalance
         }
       }
     }
+  }
+
+  // ----------------------------------------------------------------------- //
+  // Hub
+
+  override def tryEnqueuePacket(sourceSide: Option[EnumFacing], packet: Packet): Boolean = {
+    sendPacketToMountables(sourceSide, packet)
+    if (isRelayEnabled)
+      super.tryEnqueuePacket(sourceSide, packet)
+    else
+      true
+  }
+
+  override protected def relayPacket(sourceSide: Option[EnumFacing], packet: Packet): Unit = {
+    if (isRelayEnabled)
+      super.relayPacket(sourceSide, packet)
   }
 
   override protected def onPlugConnect(plug: Plug, node: Node): Unit = {
@@ -223,7 +236,7 @@ class Rack extends traits.PowerAcceptor with traits.Hub with traits.PowerBalance
   // ----------------------------------------------------------------------- //
   // SidedEnvironment
 
-  override def canConnect(side: EnumFacing) = side != facing
+  override def canConnect(side: EnumFacing): Boolean = side != facing
 
   override def sidedNode(side: EnumFacing): Node = if (side != facing) super.sidedNode(side) else null
 
@@ -231,11 +244,11 @@ class Rack extends traits.PowerAcceptor with traits.Hub with traits.PowerBalance
   // power.Common
 
   @SideOnly(Side.CLIENT)
-  override protected def hasConnector(side: EnumFacing) = side != facing
+  override protected def hasConnector(side: EnumFacing): Boolean = side != facing
 
   override protected def connector(side: EnumFacing) = Option(if (side != facing) sidedNode(side).asInstanceOf[Connector] else null)
 
-  override def energyThroughput = Settings.get.serverRackRate
+  override def energyThroughput: Double = Settings.get.serverRackRate
 
   // ----------------------------------------------------------------------- //
   // Analyzable
@@ -264,13 +277,13 @@ class Rack extends traits.PowerAcceptor with traits.Hub with traits.PowerBalance
 
   override def markChanged(slot: Int): Unit = {
     hasChanged.synchronized(hasChanged(slot) = true)
-    isOutputEnabled = hasRedstoneCard
+    setOutputEnabled(hasRedstoneCard)
   }
 
   // ----------------------------------------------------------------------- //
   // StateAware
 
-  override def getCurrentState = {
+  override def getCurrentState: util.EnumSet[StateAware.State] = {
     val result = util.EnumSet.noneOf(classOf[api.util.StateAware.State])
     components.collect {
       case Some(mountable: RackMountable) => result.addAll(mountable.getCurrentState)
@@ -289,11 +302,12 @@ class Rack extends traits.PowerAcceptor with traits.Hub with traits.PowerBalance
   // ----------------------------------------------------------------------- //
   // RedstoneAware
 
-  override protected def onRedstoneInputChanged(side: EnumFacing, oldMaxValue: Int, newMaxValue: Int) {
-    super.onRedstoneInputChanged(side, oldMaxValue, newMaxValue)
+  override protected def onRedstoneInputChanged(args: RedstoneChangedEventArgs) {
+    super.onRedstoneInputChanged(args)
     components.collect {
       case Some(mountable: RackMountable) if mountable.node != null =>
-        mountable.node.sendToNeighbors("redstone.changed", toLocal(side), int2Integer(oldMaxValue), int2Integer(newMaxValue))
+        val toLocalArgs = RedstoneChangedEventArgs(toLocal(args.side), args.oldValue, args.newValue, args.color)
+        mountable.node.sendToNeighbors("redstone.changed", toLocalArgs)
     }
   }
 
@@ -312,11 +326,11 @@ class Rack extends traits.PowerAcceptor with traits.Hub with traits.PowerBalance
   override def markDirty() {
     super.markDirty()
     if (isServer) {
-      isOutputEnabled = hasRedstoneCard
+      setOutputEnabled(hasRedstoneCard)
       ServerPacketSender.sendRackInventory(this)
     }
     else {
-      world.markBlockForUpdate(getPos)
+      getWorld.notifyBlockUpdate(getPos, getWorld.getBlockState(getPos), getWorld.getBlockState(getPos), 3)
     }
   }
 
@@ -365,9 +379,9 @@ class Rack extends traits.PowerAcceptor with traits.Hub with traits.PowerBalance
             hasChanged(slot) = false
             lastData(slot) = mountable.getData
             ServerPacketSender.sendRackMountableData(this, slot)
-            world.notifyNeighborsOfStateChange(getPos, getBlockType)
+            getWorld.notifyNeighborsOfStateChange(getPos, getBlockType, false)
             // These are working state dependent, so recompute them.
-            isOutputEnabled = hasRedstoneCard
+            setOutputEnabled(hasRedstoneCard)
           }
 
           // Power mountables without requiring them to be connected to the outside.
@@ -390,11 +404,16 @@ class Rack extends traits.PowerAcceptor with traits.Hub with traits.PowerBalance
 
   // ----------------------------------------------------------------------- //
 
+  private final val IsRelayEnabledTag = Settings.namespace + "isRelayEnabled"
+  private final val NodeMappingTag = Settings.namespace + "nodeMapping"
+  private final val LastDataTag = Settings.namespace + "lastData"
+  private final val RackDataTag = Settings.namespace + "rackData"
+
   override def readFromNBTForServer(nbt: NBTTagCompound): Unit = {
     super.readFromNBTForServer(nbt)
 
-    isRelayEnabled = nbt.getBoolean(Settings.namespace + "isRelayEnabled")
-    nbt.getTagList(Settings.namespace + "nodeMapping", NBT.TAG_INT_ARRAY).map((buses: NBTTagIntArray) =>
+    isRelayEnabled = nbt.getBoolean(IsRelayEnabledTag)
+    nbt.getTagList(NodeMappingTag, NBT.TAG_INT_ARRAY).map((buses: NBTTagIntArray) =>
       buses.getIntArray.map(id => if (id < 0 || id == EnumFacing.SOUTH.ordinal()) None else Option(EnumFacing.getFront(id)))).
       copyToArray(nodeMapping)
 
@@ -405,19 +424,19 @@ class Rack extends traits.PowerAcceptor with traits.Hub with traits.PowerBalance
   override def writeToNBTForServer(nbt: NBTTagCompound): Unit = {
     super.writeToNBTForServer(nbt)
 
-    nbt.setBoolean(Settings.namespace + "isRelayEnabled", isRelayEnabled)
-    nbt.setNewTagList(Settings.namespace + "nodeMapping", nodeMapping.map(buses =>
-      toNbt(buses.map(side => side.map(_.ordinal()).getOrElse(-1)))))
+    nbt.setBoolean(IsRelayEnabledTag, isRelayEnabled)
+    nbt.setNewTagList(NodeMappingTag, nodeMapping.map(buses =>
+      toNbt(buses.map(side => side.fold(-1)(_.ordinal())))))
   }
 
   @SideOnly(Side.CLIENT) override
   def readFromNBTForClient(nbt: NBTTagCompound): Unit = {
     super.readFromNBTForClient(nbt)
 
-    val data = nbt.getTagList(Settings.namespace + "lastData", NBT.TAG_COMPOUND).
+    val data = nbt.getTagList(LastDataTag, NBT.TAG_COMPOUND).
       toArray[NBTTagCompound]
     data.copyToArray(lastData)
-    load(nbt.getCompoundTag(Settings.namespace + "rackData"))
+    load(nbt.getCompoundTag(RackDataTag))
     connectComponents()
   }
 
@@ -425,13 +444,13 @@ class Rack extends traits.PowerAcceptor with traits.Hub with traits.PowerBalance
     super.writeToNBTForClient(nbt)
 
     val data = lastData.map(tag => if (tag == null) new NBTTagCompound() else tag)
-    nbt.setNewTagList(Settings.namespace + "lastData", data)
-    nbt.setNewCompoundTag(Settings.namespace + "rackData", save)
+    nbt.setNewTagList(LastDataTag, data)
+    nbt.setNewCompoundTag(RackDataTag, save)
   }
 
   // ----------------------------------------------------------------------- //
 
-  def slotAt(side: EnumFacing, hitX: Float, hitY: Float, hitZ: Float) = {
+  def slotAt(side: EnumFacing, hitX: Float, hitY: Float, hitZ: Float): Option[Int] = {
     if (side == facing) {
       val globalY = (hitY * 16).toInt // [0, 15]
       val l = 2
@@ -442,9 +461,9 @@ class Rack extends traits.PowerAcceptor with traits.Hub with traits.PowerBalance
     else None
   }
 
-  def isWorking(mountable: RackMountable) = mountable.getCurrentState.contains(api.util.StateAware.State.IsWorking)
+  def isWorking(mountable: RackMountable): Boolean = mountable.getCurrentState.contains(api.util.StateAware.State.IsWorking)
 
-  def hasRedstoneCard = components.exists {
+  def hasRedstoneCard: Boolean = components.exists {
     case Some(mountable: EnvironmentHost with RackMountable with IInventory) if isWorking(mountable) =>
       mountable.exists(stack => DriverRedstoneCard.worksWith(stack, mountable.getClass))
     case _ => false

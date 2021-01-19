@@ -3,6 +3,7 @@ package li.cil.oc.client.gui
 import li.cil.oc.Localization
 import li.cil.oc.Settings
 import li.cil.oc.api
+import li.cil.oc.api.internal.TextBuffer
 import li.cil.oc.client.Textures
 import li.cil.oc.client.gui.widget.ProgressBar
 import li.cil.oc.client.renderer.TextBufferRenderCache
@@ -24,11 +25,11 @@ import org.lwjgl.opengl.GL11
 import scala.collection.convert.WrapAsJava._
 
 class Robot(playerInventory: InventoryPlayer, val robot: tileentity.Robot) extends DynamicGuiContainer(new container.Robot(playerInventory, robot)) with traits.InputBuffer {
-  override protected val buffer = robot.components.collect {
+  override protected val buffer: TextBuffer = robot.components.collect {
     case Some(buffer: api.internal.TextBuffer) => buffer
   }.headOption.orNull
 
-  override protected val hasKeyboard = robot.info.components.map(api.Driver.driverFor(_, robot.getClass)).contains(opencomputers.DriverKeyboard)
+  override protected val hasKeyboard: Boolean = robot.info.components.map(api.Driver.driverFor(_, robot.getClass)).contains(opencomputers.DriverKeyboard)
 
   private val withScreenHeight = 256
   private val noScreenHeight = 108
@@ -59,9 +60,9 @@ class Robot(playerInventory: InventoryPlayer, val robot: tileentity.Robot) exten
 
   private def bufferRenderHeight = math.min(maxBufferHeight, TextBufferRenderCache.renderer.charRenderHeight * Settings.screenResolutionsByTier(0)._2)
 
-  override protected def bufferX = (8 + (maxBufferWidth - bufferRenderWidth) / 2).toInt
+  override protected def bufferX: Int = (8 + (maxBufferWidth - bufferRenderWidth) / 2).toInt
 
-  override protected def bufferY = (8 + (maxBufferHeight - bufferRenderHeight) / 2).toInt
+  override protected def bufferY: Int = (8 + (maxBufferHeight - bufferRenderHeight) / 2).toInt
 
   private val inventoryX = 169
   private val inventoryY = 155 - deltaY
@@ -136,12 +137,12 @@ class Robot(playerInventory: InventoryPlayer, val robot: tileentity.Robot) exten
         ((robot.globalBuffer / robot.globalBufferSize) * 100).toInt,
         robot.globalBuffer.toInt,
         robot.globalBufferSize.toInt))
-      copiedDrawHoveringText(tooltip, mouseX - guiLeft, mouseY - guiTop, fontRendererObj)
+      copiedDrawHoveringText(tooltip, mouseX - guiLeft, mouseY - guiTop, fontRenderer)
     }
     if (powerButton.isMouseOver) {
       val tooltip = new java.util.ArrayList[String]
       tooltip.addAll(asJavaCollection(if (robot.isRunning) Localization.Computer.TurnOff.lines.toIterable else Localization.Computer.TurnOn.lines.toIterable))
-      copiedDrawHoveringText(tooltip, mouseX - guiLeft, mouseY - guiTop, fontRendererObj)
+      copiedDrawHoveringText(tooltip, mouseX - guiLeft, mouseY - guiTop, fontRenderer)
     }
     RenderState.popAttrib()
   }
@@ -225,25 +226,25 @@ class Robot(playerInventory: InventoryPlayer, val robot: tileentity.Robot) exten
       val slot = inventorySlots.getSlot(index)
       val displayIndex = index - inventoryOffset * 4 - 4
       if (displayIndex >= 0 && displayIndex < 16) {
-        slot.xDisplayPosition = 1 + inventoryX + (displayIndex % 4) * slotSize
-        slot.yDisplayPosition = 1 + inventoryY + (displayIndex / 4) * slotSize
+        slot.xPos = 1 + inventoryX + (displayIndex % 4) * slotSize
+        slot.yPos = 1 + inventoryY + (displayIndex / 4) * slotSize
       }
       else {
         // Hide the rest!
-        slot.xDisplayPosition = -10000
-        slot.yDisplayPosition = -10000
+        slot.xPos = -10000
+        slot.yPos = -10000
       }
     }
     val yMin = guiTop + scrollY + 1
     if (maxOffset > 0) {
-      scrollButton.yPosition = yMin + (scrollHeight - 15) * inventoryOffset / maxOffset
+      scrollButton.y = yMin + (scrollHeight - 15) * inventoryOffset / maxOffset
     }
     else {
-      scrollButton.yPosition = yMin
+      scrollButton.y = yMin
     }
   }
 
-  override protected def changeSize(w: Double, h: Double, recompile: Boolean) = {
+  override protected def changeSize(w: Double, h: Double, recompile: Boolean): Double = {
     val bw = w * TextBufferRenderCache.renderer.charRenderWidth
     val bh = h * TextBufferRenderCache.renderer.charRenderHeight
     val scaleX = math.min(bufferRenderWidth / bw, 1)
@@ -265,7 +266,7 @@ class Robot(playerInventory: InventoryPlayer, val robot: tileentity.Robot) exten
       val y = guiTop + inventoryY - 1 + (slot / 4) * (selectionSize - 2)
 
       val t = Tessellator.getInstance
-      val r = t.getWorldRenderer
+      val r = t.getBuffer
       r.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX)
       r.pos(x, y, zLevel).tex(0, offsetV).endVertex()
       r.pos(x, y + selectionSize, zLevel).tex(0, offsetV + selectionStepV).endVertex()

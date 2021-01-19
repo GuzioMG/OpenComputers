@@ -1,10 +1,11 @@
 package li.cil.oc.api.prefab;
 
+import li.cil.oc.api.driver.DriverBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.BlockPos;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.world.World;
 import net.minecraftforge.oredict.OreDictionary;
@@ -27,7 +28,7 @@ import net.minecraftforge.oredict.OreDictionary;
  * @see li.cil.oc.api.network.ManagedEnvironment
  */
 @SuppressWarnings("UnusedDeclaration")
-public abstract class DriverSidedBlock implements li.cil.oc.api.driver.SidedBlock {
+public abstract class DriverSidedBlock implements DriverBlock {
     protected final ItemStack[] blocks;
 
     protected DriverSidedBlock(final ItemStack... blocks) {
@@ -43,7 +44,7 @@ public abstract class DriverSidedBlock implements li.cil.oc.api.driver.SidedBloc
 
     protected boolean worksWith(final Block referenceBlock, final int referenceMetadata) {
         for (ItemStack stack : blocks) {
-            if (stack != null && stack.getItem() instanceof ItemBlock) {
+            if (!stack.isEmpty() && stack.getItem() instanceof ItemBlock) {
                 final ItemBlock item = (ItemBlock) stack.getItem();
                 final Block supportedBlock = item.getBlock();
                 final int supportedMetadata = item.getMetadata(stack.getItemDamage());

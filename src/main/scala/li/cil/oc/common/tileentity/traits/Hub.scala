@@ -17,7 +17,11 @@ import scala.collection.mutable
 trait Hub extends traits.Environment with SidedEnvironment with Tickable {
   override def node: Node = null
 
-  override protected def isConnected = plugs.exists(plug => plug.node.address != null && plug.node.network != null)
+  override protected def isConnected = plugs.exists(plug =>
+    plug != null &&
+    plug.node != null &&
+    plug.node.address != null &&
+    plug.node.network != null)
 
   protected val plugs = EnumFacing.values.map(side => createPlug(side))
 
@@ -65,8 +69,9 @@ trait Hub extends traits.Environment with SidedEnvironment with Tickable {
     else {
       relayCooldown = -1
       if (queue.nonEmpty) queue.synchronized {
-        packetsPerCycleAvg += queue.size
-        for (i <- 0 until math.min(queue.size, relayAmount)) {
+        val packetsToRely = math.min(queue.size, relayAmount)
+        packetsPerCycleAvg += packetsToRely
+        for (i <- 0 until packetsToRely) {
           val (sourceSide, packet) = queue.dequeue()
           relayPacket(sourceSide, packet)
         }
@@ -74,7 +79,7 @@ trait Hub extends traits.Environment with SidedEnvironment with Tickable {
           relayCooldown = relayDelay - 1
         }
       }
-      else if (world.getTotalWorldTime % relayDelay == 0) {
+      else if (getWorld.getTotalWorldTime % relayDelay == 0) {
         packetsPerCycleAvg += 0
       }
     }
@@ -92,25 +97,37 @@ trait Hub extends traits.Environment with SidedEnvironment with Tickable {
   }
 
   protected def relayPacket(sourceSide: Option[EnumFacing], packet: Packet) {
-    for (side <- EnumFacing.values if Option(side) != sourceSide && sidedNode(side) != null) {
-      sidedNode(side).sendToReachable("network.message", packet)
+    for (side <- EnumFacing.values) {
+      if (sourceSide.isEmpty || sourceSide.get != side) {
+        val node = sidedNode(side)
+        if (node != null) {
+          node.sendToReachable("network.message", packet)
+        }
+      }
     }
   }
 
+  // ----------------------------------------------------------------------- //
+
+  private final val PlugsTag = Settings.namespace + "plugs"
+  private final val QueueTag = Settings.namespace + "queue"
+  private final val SideTag = "side"
+  private final val RelayCooldownTag = Settings.namespace + "relayCooldown"
+
   override def readFromNBTForServer(nbt: NBTTagCompound) {
     super.readFromNBTForServer(nbt)
-    nbt.getTagList(Settings.namespace + "plugs", NBT.TAG_COMPOUND).toArray[NBTTagCompound].
+    nbt.getTagList(PlugsTag, NBT.TAG_COMPOUND).toArray[NBTTagCompound].
       zipWithIndex.foreach {
       case (tag, index) => plugs(index).node.load(tag)
     }
-    nbt.getTagList(Settings.namespace + "queue", NBT.TAG_COMPOUND).foreach(
+    nbt.getTagList(QueueTag, NBT.TAG_COMPOUND).foreach(
       (tag: NBTTagCompound) => {
-        val side = tag.getDirection("side")
+        val side = tag.getDirection(SideTag)
         val packet = api.Network.newPacket(tag)
         queue += side -> packet
       })
-    if (nbt.hasKey(Settings.namespace + "relayCooldown")) {
-      relayCooldown = nbt.getInteger(Settings.namespace + "relayCooldown")
+    if (nbt.hasKey(RelayCooldownTag)) {
+      relayCooldown = nbt.getInteger(RelayCooldownTag)
     }
   }
 
@@ -118,20 +135,21 @@ trait Hub extends traits.Environment with SidedEnvironment with Tickable {
     super.writeToNBTForServer(nbt)
     // Side check for Waila (and other mods that may call this client side).
     if (isServer) {
-      nbt.setNewTagList(Settings.namespace + "plugs", plugs.map(plug => {
+      nbt.setNewTagList(PlugsTag, plugs.map(plug => {
         val plugNbt = new NBTTagCompound()
-        plug.node.save(plugNbt)
+        if (plug.node != null)
+          plug.node.save(plugNbt)
         plugNbt
       }))
-      nbt.setNewTagList(Settings.namespace + "queue", queue.map {
+      nbt.setNewTagList(QueueTag, queue.map {
         case (sourceSide, packet) =>
           val tag = new NBTTagCompound()
-          tag.setDirection("side", sourceSide)
+          tag.setDirection(SideTag, sourceSide)
           packet.save(tag)
           tag
       })
       if (relayCooldown > 0) {
-        nbt.setInteger(Settings.namespace + "relayCooldown", relayCooldown)
+        nbt.setInteger(RelayCooldownTag, relayCooldown)
       }
     }
   }

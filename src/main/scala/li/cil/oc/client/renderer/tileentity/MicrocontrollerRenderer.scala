@@ -5,7 +5,7 @@ import li.cil.oc.common.tileentity.Microcontroller
 import li.cil.oc.util.RenderState
 import net.minecraft.client.renderer.GlStateManager
 import net.minecraft.client.renderer.Tessellator
-import net.minecraft.client.renderer.WorldRenderer
+import net.minecraft.client.renderer.BufferBuilder
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats
 import net.minecraft.util.EnumFacing
@@ -13,8 +13,8 @@ import net.minecraft.util.ResourceLocation
 import org.lwjgl.opengl.GL11
 
 object MicrocontrollerRenderer extends TileEntitySpecialRenderer[Microcontroller] {
-  override def renderTileEntityAt(mcu: Microcontroller, x: Double, y: Double, z: Double, f: Float, damage: Int) {
-    RenderState.checkError(getClass.getName + ".renderTileEntityAt: entering (aka: wasntme)")
+  override def render(mcu: Microcontroller, x: Double, y: Double, z: Double, f: Float, damage: Int, alpha: Float) {
+    RenderState.checkError(getClass.getName + ".render: entering (aka: wasntme)")
 
     RenderState.pushAttrib()
 
@@ -38,7 +38,7 @@ object MicrocontrollerRenderer extends TileEntitySpecialRenderer[Microcontroller
     GlStateManager.scale(1, -1, 1)
 
     val t = Tessellator.getInstance
-    val r = t.getWorldRenderer
+    val r = t.getBuffer
 
     Textures.Block.bind()
     r.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX)
@@ -60,10 +60,10 @@ object MicrocontrollerRenderer extends TileEntitySpecialRenderer[Microcontroller
     GlStateManager.popMatrix()
     RenderState.popAttrib()
 
-    RenderState.checkError(getClass.getName + ".renderTileEntityAt: leaving")
+    RenderState.checkError(getClass.getName + ".render: leaving")
   }
 
-  private def renderFrontOverlay(texture: ResourceLocation, r: WorldRenderer): Unit = {
+  private def renderFrontOverlay(texture: ResourceLocation, r: BufferBuilder): Unit = {
     val icon = Textures.getSprite(texture)
     r.pos(0, 1, 0).tex(icon.getMinU, icon.getMaxV).endVertex()
     r.pos(1, 1, 0).tex(icon.getMaxU, icon.getMaxV).endVertex()

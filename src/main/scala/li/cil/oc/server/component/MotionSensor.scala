@@ -18,14 +18,13 @@ import li.cil.oc.util.SideTracker
 import net.minecraft.entity.EntityLivingBase
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.potion.Potion
-import net.minecraft.util.AxisAlignedBB
-import net.minecraft.util.Vec3
+import net.minecraft.util.math.{AxisAlignedBB, BlockPos, Vec3d}
 
 import scala.collection.convert.WrapAsJava._
 import scala.collection.convert.WrapAsScala._
 import scala.collection.mutable
 
-class MotionSensor(val host: EnvironmentHost) extends prefab.ManagedEnvironment with DeviceInfo {
+class MotionSensor(val host: EnvironmentHost) extends prefab.AbstractManagedEnvironment with DeviceInfo {
   override val node = api.Network.newNode(this, Visibility.Network).
     withComponent("motion_sensor").
     withConnector().
@@ -91,30 +90,27 @@ class MotionSensor(val host: EnvironmentHost) extends prefab.ManagedEnvironment 
     }
   }
 
-  private def sensorBounds = AxisAlignedBB.fromBounds(
+  private def sensorBounds = new AxisAlignedBB(
     x + 0.5 - radius, y + 0.5 - radius, z + 0.5 - radius,
     x + 0.5 + radius, y + 0.5 + radius, z + 0.5 + radius)
 
   private def isInRange(entity: EntityLivingBase) = entity.getDistanceSq(x + 0.5, y + 0.5, z + 0.5) <= radius * radius
 
+  private def isClearPath(target: Vec3d): Boolean = {
+    val origin = new Vec3d(x, y, z)
+    val path = target.subtract(origin).normalize()
+    val eye = origin.add(path)
+    world.rayTraceBlocks(eye, target) == null
+  }
+
   private def isVisible(entity: EntityLivingBase) =
-    entity.getActivePotionEffect(Potion.invisibility) == null &&
+    entity.getActivePotionEffect(Potion.getPotionFromResourceLocation("invisibility")) == null &&
       // Note: it only working in lit conditions works and is neat, but this
       // is pseudo-infrared driven (it only works for *living* entities, after
       // all), so I think it makes more sense for it to work in the dark, too.
       /* entity.getBrightness(0) > 0.2 && */ {
-      var ox = x + 0.5
-      var oy = y + 0.5
-      var oz = z + 0.5
-      val target = new Vec3(entity.posX, entity.posY, entity.posZ)
-      // Start trace outside of this block.
-      if (entity.posX < x) ox -= 0.75
-      if (entity.posX > x + 1) ox += 0.75
-      if (entity.posY < y) oy -= 0.75
-      if (entity.posY > y + 1) oy += 0.75
-      if (entity.posZ < z) oz -= 0.75
-      if (entity.posZ > z + 1) oz += 0.75
-      world.rayTraceBlocks(new Vec3(ox, oy, oz), target) == null
+      val target = entity.getPositionVector
+      isClearPath(target) || isClearPath(target.addVector(0.0D, entity.getEyeHeight, 0.0D))
     }
 
   private def sendSignal(entity: EntityLivingBase) {

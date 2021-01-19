@@ -15,7 +15,7 @@ import net.minecraft.item.EnumDyeColor
 import net.minecraft.nbt._
 import net.minecraft.tileentity.TileEntity
 import net.minecraft.util.EnumFacing
-import net.minecraft.util.BlockPos
+import net.minecraft.util.math.BlockPos
 import net.minecraft.world.IBlockAccess
 
 import scala.collection.JavaConverters._
@@ -250,6 +250,11 @@ private class Network private(private val data: mutable.Map[String, Network.Vert
           connects += ((addedNode, Iterable(addedNode) ++ nodes.filter(_ != addedNode)))
           reachingNodes(addedNode).foreach(node => connects += ((node, Iterable(addedNode))))
       }
+
+      // added node may load more internal nodes
+      addedNode.onConnect(addedNode)
+      val visibleNodes = nodes.filter(_.reachability == Visibility.Network)
+      visibleNodes.foreach(node => connects += ((node, nodes)))
     }
     else {
       val otherNetwork = addedNode.network.asInstanceOf[Network.Wrapper].network

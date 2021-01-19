@@ -6,7 +6,7 @@ import net.minecraft.client.model.ModelBase
 import net.minecraft.client.model.ModelRenderer
 import net.minecraft.client.renderer.GlStateManager
 import net.minecraft.entity.Entity
-import net.minecraft.util.Vec3
+import net.minecraft.util.math.Vec3d
 import org.lwjgl.opengl.GL11
 
 final class ModelQuadcopter extends ModelBase {
@@ -58,21 +58,21 @@ final class ModelQuadcopter extends ModelBase {
   light3.addBox("flap3", -7, 0, -7, 6, 1, 6)
 
   private val scale = 1 / 16f
-  private val up = new Vec3(0, 1, 0)
+  private val up = new Vec3d(0, 1, 0)
 
   private def doRender(drone: Drone, dt: Float) {
     if (drone.isRunning) {
       val timeJitter = drone.hashCode() ^ 0xFF
-      GlStateManager.translate(0, (math.sin(timeJitter + (drone.worldObj.getTotalWorldTime + dt) / 20.0) * (1 / 16f)).toFloat, 0)
+      GlStateManager.translate(0, (math.sin(timeJitter + (drone.getEntityWorld.getTotalWorldTime + dt) / 20.0) * (1 / 16f)).toFloat, 0)
     }
 
-    val velocity = new Vec3(drone.motionX, drone.motionY, drone.motionZ)
+    val velocity = new Vec3d(drone.motionX, drone.motionY, drone.motionZ)
     val direction = velocity.normalize()
     if (direction.dotProduct(up) < 0.99) {
       // Flying sideways.
       val rotationAxis = direction.crossProduct(up)
       val relativeSpeed = velocity.lengthVector().toFloat / drone.maxVelocity
-      GlStateManager.rotate(relativeSpeed * -20, rotationAxis.xCoord.toFloat, rotationAxis.yCoord.toFloat, rotationAxis.zCoord.toFloat)
+      GlStateManager.rotate(relativeSpeed * -20, rotationAxis.x.toFloat, rotationAxis.y.toFloat, rotationAxis.z.toFloat)
     }
 
     GlStateManager.rotate(drone.bodyAngle, 0, 1, 0)
@@ -109,7 +109,7 @@ final class ModelQuadcopter extends ModelBase {
       // Additive blending for the lights.
       RenderState.makeItBlend()
       GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE)
-      // Light color.
+
       val lightColor = drone.lightColor
       val r = (lightColor >>> 16) & 0xFF
       val g = (lightColor >>> 8) & 0xFF
@@ -157,6 +157,7 @@ final class ModelQuadcopter extends ModelBase {
     light2.rotateAngleZ = -tilt
     light3.rotateAngleX = tilt
     light3.rotateAngleZ = -tilt
+
 
     RenderState.makeItBlend()
     GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE)

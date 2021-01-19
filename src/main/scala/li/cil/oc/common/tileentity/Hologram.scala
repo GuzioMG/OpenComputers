@@ -3,22 +3,21 @@ package li.cil.oc.common.tileentity
 import java.util
 
 import li.cil.oc._
+import li.cil.oc.api.driver.DeviceInfo
 import li.cil.oc.api.driver.DeviceInfo.DeviceAttribute
 import li.cil.oc.api.driver.DeviceInfo.DeviceClass
-import li.cil.oc.api.driver.DeviceInfo
 import li.cil.oc.api.machine.Arguments
 import li.cil.oc.api.machine.Callback
 import li.cil.oc.api.machine.Context
 import li.cil.oc.api.network.Analyzable
 import li.cil.oc.api.network._
 import li.cil.oc.common.SaveHandler
-import li.cil.oc.integration.util.Waila
 import li.cil.oc.server.{PacketSender => ServerPacketSender}
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.nbt.NBTTagCompound
-import net.minecraft.util.AxisAlignedBB
 import net.minecraft.util.EnumFacing
-import net.minecraft.util.Vec3
+import net.minecraft.util.math.AxisAlignedBB
+import net.minecraft.util.math.Vec3d
 import net.minecraftforge.fml.relauncher.Side
 import net.minecraftforge.fml.relauncher.SideOnly
 
@@ -58,7 +57,7 @@ class Hologram(var tier: Int) extends traits.Environment with SidedEnvironment w
   var scale = 1.0
 
   // Projection Y position offset - consider adding X,Z later perhaps
-  var translation = new Vec3(0, 0, 0)
+  var translation = new Vec3d(0, 0, 0)
 
   // Relative number of lit columns (for energy cost).
   var litRatio = -1.0
@@ -243,16 +242,17 @@ class Hologram(var tier: Int) extends traits.Environment with SidedEnvironment w
               case ox if ox >= 0 && ox < width =>
                 volume(nz * width + nx) = volume(oz * width + ox)
                 volume(nz * width + nx + width * width) = volume(oz * width + ox + width * width)
+                // previous, we set the volume area as dirty. but this is error prone
+                // in case the update sends the values - we only send the corners of the copied arae
+                // it is FAR better to mark each bit as dirty, and let the optimized update do what
+                // it was designed to do
+                setDirty(nx, nz)
               case _ => /* Got no source column. */
             }
           }
         case _ => /* Got no source row. */
       }
     }
-
-    // Mark target rectangle dirty.
-    setDirty(math.min(dx0, dx1), math.min(dz0, dz1))
-    setDirty(math.max(dx0, dx1), math.max(dz0, dz1))
 
     // The reasoning here is: it'd take 18 ticks to do the whole are with fills,
     // so make this slightly more efficient (15 ticks - 0.75 seconds). Make it
@@ -278,7 +278,7 @@ class Hologram(var tier: Int) extends traits.Environment with SidedEnvironment w
 
   @Callback(direct = true, doc = """function():number, number, number -- Returns the relative render projection offsets of the hologram.""")
   def getTranslation(context: Context, args: Arguments): Array[AnyRef] = {
-    result(translation.xCoord, translation.yCoord, translation.zCoord)
+    result(translation.x, translation.y, translation.z)
   }
 
   @Callback(doc = """function(tx:number, ty:number, tz:number) -- Sets the relative render projection offsets of the hologram.""")
@@ -289,7 +289,7 @@ class Hologram(var tier: Int) extends traits.Environment with SidedEnvironment w
     val ty = math.max(0, math.min(maxTranslation * 2, args.checkDouble(1)))
     val tz = math.max(-maxTranslation, math.min(maxTranslation, args.checkDouble(2)))
 
-    translation = new Vec3(tx, ty, tz)
+    translation = new Vec3d(tx, ty, tz)
 
     ServerPacketSender.sendHologramOffset(this)
     null
@@ -359,6 +359,9 @@ class Hologram(var tier: Int) extends traits.Environment with SidedEnvironment w
     else result(Unit, "not supported")
   }
 
+  @Callback(direct = true, doc = "function():number, number, number -- Get the dimension of the x,y,z axes.")
+  def getDimensions(context: Context, args: Arguments): Array[AnyRef] = result(width, height, width)
+
   private def checkCoordinates(args: Arguments, idxX: Int = 0, idxY: Int = 1, idxZ: Int = 2) = {
     val x = if (idxX >= 0) args.checkInteger(idxX) - 1 else 0
     if (x < 0 || x >= width) throw new ArrayIndexOutOfBoundsException("x")
@@ -407,7 +410,7 @@ class Hologram(var tier: Int) extends traits.Environment with SidedEnvironment w
           ServerPacketSender.sendHologramValues(this)
         resetDirtyFlag()
       }
-      if (world.getTotalWorldTime % Settings.get.tickFrequency == 0) {
+      if (getWorld.getTotalWorldTime % Settings.get.tickFrequency == 0) {
         if (litRatio < 0) this.synchronized {
           litRatio = 0
           for (i <- volume.indices) {
@@ -440,100 +443,118 @@ class Hologram(var tier: Int) extends traits.Environment with SidedEnvironment w
     val cx = x + 0.5
     val cy = y + 0.5
     val cz = z + 0.5
-    val sh = width / 16 * scale * Sqrt2 // overscale to take into account 45 degree rotation
+    val sh = width / 16 * scale * Sqrt2
+    // overscale to take into account 45 degree rotation
     val sv = height / 16 * scale * Sqrt2
-    AxisAlignedBB.fromBounds(
-      cx + (-0.5 + translation.xCoord) * sh,
-      cy + translation.yCoord * sv,
-      cz + (-0.5 + translation.zCoord) * sh,
-      cx + (0.5 + translation.xCoord) * sh,
-      cy + (1 + translation.yCoord) * sv,
-      cz + (0.5 + translation.xCoord) * sh)
+    new AxisAlignedBB(
+      cx + (-0.5 + translation.x) * sh,
+      cy + translation.y * sv,
+      cz + (-0.5 + translation.z) * sh,
+      cx + (0.5 + translation.x) * sh,
+      cy + (1 + translation.y) * sv,
+      cz + (0.5 + translation.x) * sh)
   }
 
   // ----------------------------------------------------------------------- //
 
+  private def dataPath = node.address + "_data"
+
+  private final val TierTag = Settings.namespace + "tier"
+  private final val VolumeTag = "volume"
+  private final val ColorsTag = "colors"
+  private final val ScaleTag = Settings.namespace + "scale"
+  private final val OffsetXTag = Settings.namespace + "offsetX"
+  private final val OffsetYTag = Settings.namespace + "offsetY"
+  private final val OffsetZTag = Settings.namespace + "offsetZ"
+  private final val RotationAngleTag = Settings.namespace + "rotationAngle"
+  private final val RotationXTag = Settings.namespace + "rotationX"
+  private final val RotationYTag = Settings.namespace + "rotationY"
+  private final val RotationZTag = Settings.namespace + "rotationZ"
+  private final val RotationSpeedTag = Settings.namespace + "rotationSpeed"
+  private final val RotationSpeedXTag = Settings.namespace + "rotationSpeedX"
+  private final val RotationSpeedYTag = Settings.namespace + "rotationSpeedY"
+  private final val RotationSpeedZTag = Settings.namespace + "rotationSpeedZ"
+  private final val HasPowerTag = Settings.namespace + "hasPower"
+
   override def readFromNBTForServer(nbt: NBTTagCompound) {
-    tier = nbt.getByte(Settings.namespace + "tier") max 0 min 1
+    tier = nbt.getByte(TierTag) max 0 min 1
     super.readFromNBTForServer(nbt)
-    val tag = SaveHandler.loadNBT(nbt, node.address + "_data")
-    tag.getIntArray("volume").copyToArray(volume)
-    tag.getIntArray("colors").map(convertColor).copyToArray(colors)
-    scale = nbt.getDouble(Settings.namespace + "scale")
-    val tx = nbt.getDouble(Settings.namespace + "offsetX")
-    val ty = nbt.getDouble(Settings.namespace + "offsetY")
-    val tz = nbt.getDouble(Settings.namespace + "offsetZ")
-    translation = new Vec3(tx, ty, tz)
-    rotationAngle = nbt.getFloat(Settings.namespace + "rotationAngle")
-    rotationX = nbt.getFloat(Settings.namespace + "rotationX")
-    rotationY = nbt.getFloat(Settings.namespace + "rotationY")
-    rotationZ = nbt.getFloat(Settings.namespace + "rotationZ")
-    rotationSpeed = nbt.getFloat(Settings.namespace + "rotationSpeed")
-    rotationSpeedX = nbt.getFloat(Settings.namespace + "rotationSpeedX")
-    rotationSpeedY = nbt.getFloat(Settings.namespace + "rotationSpeedY")
-    rotationSpeedZ = nbt.getFloat(Settings.namespace + "rotationSpeedZ")
+    val tag = SaveHandler.loadNBT(nbt, dataPath)
+    tag.getIntArray(VolumeTag).copyToArray(volume)
+    tag.getIntArray(ColorsTag).map(convertColor).copyToArray(colors)
+    scale = nbt.getDouble(ScaleTag)
+    val tx = nbt.getDouble(OffsetXTag)
+    val ty = nbt.getDouble(OffsetYTag)
+    val tz = nbt.getDouble(OffsetZTag)
+    translation = new Vec3d(tx, ty, tz)
+    rotationAngle = nbt.getFloat(RotationAngleTag)
+    rotationX = nbt.getFloat(RotationXTag)
+    rotationY = nbt.getFloat(RotationYTag)
+    rotationZ = nbt.getFloat(RotationZTag)
+    rotationSpeed = nbt.getFloat(RotationSpeedTag)
+    rotationSpeedX = nbt.getFloat(RotationSpeedXTag)
+    rotationSpeedY = nbt.getFloat(RotationSpeedYTag)
+    rotationSpeedZ = nbt.getFloat(RotationSpeedZTag)
   }
 
   override def writeToNBTForServer(nbt: NBTTagCompound) = this.synchronized {
-    nbt.setByte(Settings.namespace + "tier", tier.toByte)
+    nbt.setByte(TierTag, tier.toByte)
     super.writeToNBTForServer(nbt)
-    if (!Waila.isSavingForTooltip) {
-      SaveHandler.scheduleSave(world, x, z, nbt, node.address + "_data", tag => {
-        tag.setIntArray("volume", volume)
-        tag.setIntArray("colors", colors.map(convertColor))
-      })
-    }
-    nbt.setDouble(Settings.namespace + "scale", scale)
-    nbt.setDouble(Settings.namespace + "offsetX", translation.xCoord)
-    nbt.setDouble(Settings.namespace + "offsetY", translation.yCoord)
-    nbt.setDouble(Settings.namespace + "offsetZ", translation.zCoord)
-    nbt.setFloat(Settings.namespace + "rotationAngle", rotationAngle)
-    nbt.setFloat(Settings.namespace + "rotationX", rotationX)
-    nbt.setFloat(Settings.namespace + "rotationY", rotationY)
-    nbt.setFloat(Settings.namespace + "rotationZ", rotationZ)
-    nbt.setFloat(Settings.namespace + "rotationSpeed", rotationSpeed)
-    nbt.setFloat(Settings.namespace + "rotationSpeedX", rotationSpeedX)
-    nbt.setFloat(Settings.namespace + "rotationSpeedY", rotationSpeedY)
-    nbt.setFloat(Settings.namespace + "rotationSpeedZ", rotationSpeedZ)
+    SaveHandler.scheduleSave(getWorld, x, z, nbt, dataPath, tag => {
+      tag.setIntArray(VolumeTag, volume)
+      tag.setIntArray(ColorsTag, colors.map(convertColor))
+    })
+    nbt.setDouble(ScaleTag, scale)
+    nbt.setDouble(OffsetXTag, translation.x)
+    nbt.setDouble(OffsetYTag, translation.y)
+    nbt.setDouble(OffsetZTag, translation.z)
+    nbt.setFloat(RotationAngleTag, rotationAngle)
+    nbt.setFloat(RotationXTag, rotationX)
+    nbt.setFloat(RotationYTag, rotationY)
+    nbt.setFloat(RotationZTag, rotationZ)
+    nbt.setFloat(RotationSpeedTag, rotationSpeed)
+    nbt.setFloat(RotationSpeedXTag, rotationSpeedX)
+    nbt.setFloat(RotationSpeedYTag, rotationSpeedY)
+    nbt.setFloat(RotationSpeedZTag, rotationSpeedZ)
   }
 
   @SideOnly(Side.CLIENT)
   override def readFromNBTForClient(nbt: NBTTagCompound) {
     super.readFromNBTForClient(nbt)
-    nbt.getIntArray("volume").copyToArray(volume)
-    nbt.getIntArray("colors").copyToArray(colors)
-    scale = nbt.getDouble("scale")
-    hasPower = nbt.getBoolean("hasPower")
-    val tx = nbt.getDouble("offsetX")
-    val ty = nbt.getDouble("offsetY")
-    val tz = nbt.getDouble("offsetZ")
-    translation = new Vec3(tx, ty, tz)
-    rotationAngle = nbt.getFloat("rotationAngle")
-    rotationX = nbt.getFloat("rotationX")
-    rotationY = nbt.getFloat("rotationY")
-    rotationZ = nbt.getFloat("rotationZ")
-    rotationSpeed = nbt.getFloat("rotationSpeed")
-    rotationSpeedX = nbt.getFloat("rotationSpeedX")
-    rotationSpeedY = nbt.getFloat("rotationSpeedY")
-    rotationSpeedZ = nbt.getFloat("rotationSpeedZ")
+    nbt.getIntArray(VolumeTag).copyToArray(volume)
+    nbt.getIntArray(ColorsTag).copyToArray(colors)
+    scale = nbt.getDouble(ScaleTag)
+    hasPower = nbt.getBoolean(HasPowerTag)
+    val tx = nbt.getDouble(OffsetXTag)
+    val ty = nbt.getDouble(OffsetYTag)
+    val tz = nbt.getDouble(OffsetZTag)
+    translation = new Vec3d(tx, ty, tz)
+    rotationAngle = nbt.getFloat(RotationAngleTag)
+    rotationX = nbt.getFloat(RotationXTag)
+    rotationY = nbt.getFloat(RotationYTag)
+    rotationZ = nbt.getFloat(RotationZTag)
+    rotationSpeed = nbt.getFloat(RotationSpeedTag)
+    rotationSpeedX = nbt.getFloat(RotationSpeedXTag)
+    rotationSpeedY = nbt.getFloat(RotationSpeedYTag)
+    rotationSpeedZ = nbt.getFloat(RotationSpeedZTag)
   }
 
   override def writeToNBTForClient(nbt: NBTTagCompound) {
     super.writeToNBTForClient(nbt)
-    nbt.setIntArray("volume", volume)
-    nbt.setIntArray("colors", colors)
-    nbt.setDouble("scale", scale)
-    nbt.setBoolean("hasPower", hasPower)
-    nbt.setDouble("offsetX", translation.xCoord)
-    nbt.setDouble("offsetY", translation.yCoord)
-    nbt.setDouble("offsetZ", translation.zCoord)
-    nbt.setFloat("rotationAngle", rotationAngle)
-    nbt.setFloat("rotationX", rotationX)
-    nbt.setFloat("rotationY", rotationY)
-    nbt.setFloat("rotationZ", rotationZ)
-    nbt.setFloat("rotationSpeed", rotationSpeed)
-    nbt.setFloat("rotationSpeedX", rotationSpeedX)
-    nbt.setFloat("rotationSpeedY", rotationSpeedY)
-    nbt.setFloat("rotationSpeedZ", rotationSpeedZ)
+    nbt.setIntArray(VolumeTag, volume)
+    nbt.setIntArray(ColorsTag, colors)
+    nbt.setDouble(ScaleTag, scale)
+    nbt.setBoolean(HasPowerTag, hasPower)
+    nbt.setDouble(OffsetXTag, translation.x)
+    nbt.setDouble(OffsetYTag, translation.y)
+    nbt.setDouble(OffsetZTag, translation.z)
+    nbt.setFloat(RotationAngleTag, rotationAngle)
+    nbt.setFloat(RotationXTag, rotationX)
+    nbt.setFloat(RotationYTag, rotationY)
+    nbt.setFloat(RotationZTag, rotationZ)
+    nbt.setFloat(RotationSpeedTag, rotationSpeed)
+    nbt.setFloat(RotationSpeedXTag, rotationSpeedX)
+    nbt.setFloat(RotationSpeedYTag, rotationSpeedY)
+    nbt.setFloat(RotationSpeedZTag, rotationSpeedZ)
   }
 }

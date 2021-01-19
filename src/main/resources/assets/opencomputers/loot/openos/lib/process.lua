@@ -26,7 +26,7 @@ function process.load(path, env, init, name)
   checkArg(3, init, "function", "nil")
   checkArg(4, name, "string", "nil")
 
-  assert(type(path) == "string" or env == nil, "process cannot load function environemnts")
+  assert(type(path) == "string" or env == nil, "process cannot load function environments")
 
   local p = process.findProcess()
   env = env or p.env
@@ -65,11 +65,7 @@ function process.load(path, env, init, name)
           return code(init(...))
         end,
         function(msg)
-          -- msg can be a custom error object
-          if type(msg) == "table" then
-            if msg.reason ~= "terminated" then
-              io.stderr:write(tostring(msg.reason), "\n")
-            end
+          if type(msg) == "table" and msg.reason == "terminated" then
             return msg.code or 0
           end
           local stack = debug.traceback():gsub("^([^\n]*\n)[^\n]*\n[^\n]*\n","%1")
@@ -77,11 +73,15 @@ function process.load(path, env, init, name)
           return 128 -- syserr
         end, ...)
     }
-    process.internal.close(thread, result)
+
     --result[1] is false if the exception handler also crashed
     if not result[1] and type(result[2]) ~= "number" then
-      require("event").onError(string.format("process library exception handler crashed: %s", tostring(result[2])))
+      io.stderr:write("process library exception handler crashed: ", tostring(result[2]))
     end
+
+    -- onError opens a file, you can't open a file without a process, we close the process last
+    process.internal.close(thread, result)
+
     return select(2, table.unpack(result))
   end, true)
   local new_proc =
@@ -97,7 +97,9 @@ function process.load(path, env, init, name)
     parent = p,
     instances = setmetatable({}, {__mode="v"}),
   }
-  setmetatable(new_proc.data.io, {__index=p.data.io})
+  for i,fd in pairs(p.data.io) do
+    new_proc.data.io[i] = io.dup(fd)
+  end
   setmetatable(new_proc.data, {__index=p.data})
   process.list[thread] = new_proc
 
@@ -129,8 +131,11 @@ function process.internal.close(thread, result)
   checkArg(1,thread,"thread")
   local pdata = process.info(thread).data
   pdata.result = result
-  for _,v in pairs(pdata.handles) do
-    pcall(v.close, v)
+  while pdata.handles[1] do
+    local h = table.remove(pdata.handles)
+    if h.close then
+      pcall(h.close, h)
+    end
   end
   process.list[thread] = nil
 end
@@ -148,6 +153,30 @@ function process.internal.continue(co, ...)
     end
   end
   return table.unpack(result, 2, result.n)
+end
+
+function process.removeHandle(handle, proc)
+  local handles = (proc or process.info()).data.handles
+  for pos, h in ipairs(handles) do
+    if h == handle then
+      return table.remove(handles, pos)
+    end
+  end
+end
+
+function process.addHandle(handle, proc)
+  local _close = handle.close
+  local handles = (proc or process.info()).data.handles
+  table.insert(handles, handle)
+  function handle:close(...)
+    if _close then
+      self.close = _close
+      _close = nil
+      process.removeHandle(self, proc)
+      return self:close(...)
+    end
+  end
+  return handle
 end
 
 function process.running(level) -- kept for backwards compat, prefer process.info

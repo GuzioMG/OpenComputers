@@ -26,11 +26,14 @@ import li.cil.oc.common.item
 import li.cil.oc.common.item.Delegator
 import li.cil.oc.util.ExtendedNBT._
 import net.minecraft.entity.player.EntityPlayer
+import net.minecraft.item.ItemStack
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.nbt.NBTTagString
 import net.minecraft.util.EnumFacing
+import net.minecraft.util.EnumHand
 import net.minecraftforge.common.util.Constants.NBT
 
+import scala.collection.convert.WrapAsScala._
 import scala.collection.convert.WrapAsJava._
 import scala.collection.mutable
 
@@ -51,7 +54,7 @@ class TerminalServer(val rack: api.internal.Rack, val slot: Int) extends Environ
     val keyboard = api.Driver.driverFor(keyboardItem, getClass).createEnvironment(keyboardItem, this).asInstanceOf[api.internal.Keyboard]
     keyboard.setUsableOverride(new UsabilityChecker {
       override def isUsableByPlayer(keyboard: api.internal.Keyboard, player: EntityPlayer) = {
-        val stack = player.getHeldItem
+        val stack = player.getHeldItemMainhand
         Delegator.subItem(stack) match {
           case Some(t: item.Terminal) if stack.hasTagCompound => sidedKeys.contains(stack.getTagCompound.getString(Settings.namespace + "key"))
           case _ => false
@@ -61,10 +64,20 @@ class TerminalServer(val rack: api.internal.Rack, val slot: Int) extends Environ
     keyboard
   }
 
-  var range = Settings.get.maxWirelessRange
+  var range = Settings.get.maxWirelessRange(Tier.Two)
   val keys = mutable.ListBuffer.empty[String]
 
-  def address = rack.getMountableData(slot).getString("terminalAddress")
+  def hasAddress: Boolean = {
+    if (rack != null) {
+      val data = rack.getMountableData(slot)
+      if (data != null) {
+        return data.hasKey("terminalAddress")
+      }
+    }
+    false
+  }
+
+  def address: String = rack.getMountableData(slot).getString("terminalAddress")
 
   def sidedKeys = {
     if (!rack.world.isRemote) keys
@@ -133,24 +146,23 @@ class TerminalServer(val rack: api.internal.Rack, val slot: Int) extends Environ
 
   override def getConnectableAt(index: Int): RackBusConnectable = null
 
-  override def onActivate(player: EntityPlayer, hitX: Float, hitY: Float): Boolean = {
-    val stack = player.getHeldItem
-    if (api.Items.get(stack) == api.Items.get(Constants.ItemName.Terminal)) {
+  override def onActivate(player: EntityPlayer, hand: EnumHand, heldItem: ItemStack, hitX: Float, hitY: Float): Boolean = {
+    if (api.Items.get(heldItem) == api.Items.get(Constants.ItemName.Terminal)) {
       if (!world.isRemote) {
         val key = UUID.randomUUID().toString
-        if (!stack.hasTagCompound) {
-          stack.setTagCompound(new NBTTagCompound())
+        if (!heldItem.hasTagCompound) {
+          heldItem.setTagCompound(new NBTTagCompound())
         }
         else {
-          keys -= stack.getTagCompound.getString(Settings.namespace + "key")
+          keys -= heldItem.getTagCompound.getString(Settings.namespace + "key")
         }
         val maxSize = Settings.get.terminalsPerServer
         while (keys.length >= maxSize) {
           keys.remove(0)
         }
         keys += key
-        stack.getTagCompound.setString(Settings.namespace + "key", key)
-        stack.getTagCompound.setString(Settings.namespace + "server", node.address)
+        heldItem.getTagCompound.setString(Settings.namespace + "key", key)
+        heldItem.getTagCompound.setString(Settings.namespace + "server", node.address)
         rack.markChanged(slot)
         player.inventory.markDirty()
       }
@@ -162,21 +174,25 @@ class TerminalServer(val rack: api.internal.Rack, val slot: Int) extends Environ
   // ----------------------------------------------------------------------- //
   // Persistable
 
+  private final val BufferTag = Settings.namespace + "buffer"
+  private final val KeyboardTag = Settings.namespace + "keyboard"
+  private final val KeysTag = Settings.namespace + "keys"
+
   override def load(nbt: NBTTagCompound): Unit = {
     if (!rack.world.isRemote) {
       node.load(nbt)
     }
-    buffer.load(nbt.getCompoundTag(Settings.namespace + "buffer"))
-    keyboard.load(nbt.getCompoundTag(Settings.namespace + "keyboard"))
+    buffer.load(nbt.getCompoundTag(BufferTag))
+    keyboard.load(nbt.getCompoundTag(KeyboardTag))
     keys.clear()
-    nbt.getTagList(Settings.namespace + "keys", NBT.TAG_STRING).foreach((tag: NBTTagString) => keys += tag.getString)
+    nbt.getTagList(KeysTag, NBT.TAG_STRING).foreach((tag: NBTTagString) => keys += tag.getString)
   }
 
   override def save(nbt: NBTTagCompound): Unit = {
     node.save(nbt)
-    nbt.setNewCompoundTag(Settings.namespace + "buffer", buffer.save)
-    nbt.setNewCompoundTag(Settings.namespace + "keyboard", keyboard.save)
-    nbt.setNewTagList(Settings.namespace + "keys", keys)
+    nbt.setNewCompoundTag(BufferTag, buffer.save)
+    nbt.setNewCompoundTag(KeyboardTag, keyboard.save)
+    nbt.setNewTagList(KeysTag, keys)
   }
 
   // ----------------------------------------------------------------------- //
@@ -207,13 +223,77 @@ class TerminalServer(val rack: api.internal.Rack, val slot: Int) extends Environ
 
   override def onLifecycleStateChange(state: Lifecycle.LifecycleState): Unit = if (rack.world.isRemote) state match {
     case Lifecycle.LifecycleState.Initialized =>
-      TerminalServer.loaded += this
+      TerminalServer.loaded.add(this)
     case Lifecycle.LifecycleState.Disposed =>
-      TerminalServer.loaded -= this
+      TerminalServer.loaded.remove(this)
     case _ => // Ignore.
   }
 }
 
 object TerminalServer {
-  val loaded = mutable.Buffer.empty[TerminalServer]
+  val loaded = new TerminalServerCache()
+
+  // we need a smart cache because nodes are loaded in before they have addresses
+  // and we need a unique set of terminal servers based on address
+  // This cache acts as a Map[address: String, term: TerminalServer]
+  // But it can store terminals before they have an address
+  // Null-address terminals are not available for binding
+  // As an address loads, repeated addresses are dropped from the list
+  class TerminalServerCache {
+
+    private val ready: mutable.Map[String, TerminalServer] = new mutable.HashMap[String, TerminalServer]()
+    private val pending: mutable.Buffer[TerminalServer] = mutable.Buffer.empty[TerminalServer]
+
+    private def completePending(): Unit = {
+      val promoted: mutable.Buffer[TerminalServer] = mutable.Buffer.empty[TerminalServer]
+      pending.foreach { term => if (term.hasAddress)
+        promoted += term
+      }
+      promoted.foreach { term =>
+        pending -= term
+        val address = term.address
+        if (!ready.contains(address)) {
+          ready.put(address, term)
+        }
+      }
+    }
+
+    def add(terminal: TerminalServer): Boolean = {
+      completePending()
+      if (terminal.hasAddress) {
+        val newAddress: String = terminal.address
+        if (ready.contains(newAddress)) {
+          false
+        } else {
+          ready.put(newAddress, terminal)
+          true
+        }
+      }
+      else {
+        pending += terminal
+        true
+      }
+    }
+
+    def remove(terminal: TerminalServer): Boolean = {
+      completePending()
+      if (terminal.hasAddress)
+        ready.remove(terminal.address).isDefined
+      else {
+        val before = pending.size
+        pending -= terminal
+        pending.size > before
+      }
+    }
+
+    def clear(): Unit = {
+      ready.clear()
+      pending.clear()
+    }
+
+    def find(address: String): Option[TerminalServer] = {
+      completePending()
+      ready.get(address)
+    }
+  }
 }

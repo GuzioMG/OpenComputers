@@ -12,7 +12,7 @@ import li.cil.oc.integration.util.ItemBlacklist
 import li.cil.oc.server.agent
 import li.cil.oc.util.BlockPosition
 import li.cil.oc.util.Rarity
-import net.minecraft.client.resources.model.ModelResourceLocation
+import net.minecraft.client.renderer.block.model.ModelResourceLocation
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.item.ItemStack
 import net.minecraft.util.EnumFacing
@@ -30,13 +30,13 @@ class Drone(val parent: Delegator) extends traits.Delegate with CustomModel {
 
   @SideOnly(Side.CLIENT)
   override def bakeModels(bakeEvent: ModelBakeEvent): Unit = {
-    bakeEvent.modelRegistry.putObject(getModelLocation(createItemStack()), DroneModel)
+    bakeEvent.getModelRegistry.putObject(getModelLocation(createItemStack()), DroneModel)
   }
 
   override protected def tooltipExtended(stack: ItemStack, tooltip: util.List[String]): Unit = {
     if (KeyBindings.showExtendedTooltips) {
       val info = new DroneData(stack)
-      for (component <- info.components if component != null) {
+      for (component <- info.components if !component.isEmpty) {
         tooltip.add("- " + component.getDisplayName)
       }
     }
@@ -60,9 +60,9 @@ class Drone(val parent: Delegator) extends traits.Delegate with CustomModel {
           drone.ownerUUID = player.getGameProfile.getId
       }
       drone.initializeAfterPlacement(stack, player, position.offset(hitX * 1.1f, hitY * 1.1f, hitZ * 1.1f))
-      world.spawnEntityInWorld(drone)
+      world.spawnEntity(drone)
     }
-    stack.stackSize -= 1
+    stack.shrink(1)
     true
   }
 }

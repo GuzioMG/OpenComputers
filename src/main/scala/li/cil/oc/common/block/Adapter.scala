@@ -3,12 +3,13 @@ package li.cil.oc.common.block
 import li.cil.oc.common.GuiType
 import li.cil.oc.common.tileentity
 import li.cil.oc.integration.util.Wrench
-import li.cil.oc.util.BlockPosition
 import net.minecraft.block.Block
 import net.minecraft.block.state.IBlockState
 import net.minecraft.entity.player.EntityPlayer
-import net.minecraft.util.BlockPos
+import net.minecraft.item.ItemStack
 import net.minecraft.util.EnumFacing
+import net.minecraft.util.EnumHand
+import net.minecraft.util.math.BlockPos
 import net.minecraft.world.IBlockAccess
 import net.minecraft.world.World
 
@@ -19,7 +20,7 @@ class Adapter extends SimpleBlock with traits.GUI {
 
   // ----------------------------------------------------------------------- //
 
-  override def onNeighborBlockChange(world: World, pos: BlockPos, state: IBlockState, neighborBlock: Block) =
+  override def neighborChanged(state: IBlockState, world: World, pos: BlockPos, block: Block, fromPos: BlockPos): Unit =
     world.getTileEntity(pos) match {
       case adapter: tileentity.Adapter => adapter.neighborChanged()
       case _ => // Ignore.
@@ -41,7 +42,7 @@ class Adapter extends SimpleBlock with traits.GUI {
       case _ => // Ignore.
     }
 
-  override def localOnBlockActivated(world: World, pos: BlockPos, player: EntityPlayer, side: EnumFacing, hitX: Float, hitY: Float, hitZ: Float): Boolean = {
+  override def localOnBlockActivated(world: World, pos: BlockPos, player: EntityPlayer, hand: EnumHand, heldItem: ItemStack, side: EnumFacing, hitX: Float, hitY: Float, hitZ: Float): Boolean = {
     if (Wrench.holdsApplicableWrench(player, pos)) {
       val sideToToggle = if (player.isSneaking) side.getOpposite else side
       world.getTileEntity(pos) match {
@@ -54,6 +55,6 @@ class Adapter extends SimpleBlock with traits.GUI {
         case _ => false
       }
     }
-    else super.localOnBlockActivated(world, pos, player, side, hitX, hitY, hitZ)
+    else super.localOnBlockActivated(world, pos, player, hand, heldItem, side, hitX, hitY, hitZ)
   }
 }

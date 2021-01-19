@@ -10,14 +10,12 @@ import li.cil.oc.client.Textures
 import li.cil.oc.common.EventHandler
 import li.cil.oc.common.tileentity
 import li.cil.oc.util.RenderState
-import net.minecraft.block.Block
+import li.cil.oc.util.StackOption
+import li.cil.oc.util.StackOption._
 import net.minecraft.client.Minecraft
-import net.minecraft.client.renderer.GLAllocation
-import net.minecraft.client.renderer.GlStateManager
-import net.minecraft.client.renderer.Tessellator
-import net.minecraft.client.renderer.WorldRenderer
+import net.minecraft.client.renderer._
 import net.minecraft.client.renderer.block.model.ItemCameraTransforms.TransformType
-import net.minecraft.client.renderer.entity.RendererLivingEntity
+import net.minecraft.client.renderer.entity.RenderLivingBase
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats
 import net.minecraft.client.renderer.vertex.VertexFormat
@@ -25,9 +23,9 @@ import net.minecraft.client.renderer.vertex.VertexFormatElement
 import net.minecraft.init.Items
 import net.minecraft.item.ItemBlock
 import net.minecraft.item.ItemStack
-import net.minecraft.util.EnumChatFormatting
 import net.minecraft.util.EnumFacing
-import net.minecraft.util.Vec3
+import net.minecraft.util.math.Vec3d
+import net.minecraft.util.text.TextFormatting
 import net.minecraftforge.client.MinecraftForgeClient
 import net.minecraftforge.common.MinecraftForge
 import org.lwjgl.opengl.GL11
@@ -69,27 +67,27 @@ object RobotRenderer extends TileEntitySpecialRenderer[tileentity.RobotProxy] {
   POSITION_TEX_NORMALF.addElement(DefaultVertexFormats.TEX_2F)
   POSITION_TEX_NORMALF.addElement(NORMAL_3F)
 
-  private implicit def extendWorldRenderer(self: WorldRenderer): ExtendedWorldRenderer = new ExtendedWorldRenderer(self)
+  private implicit def extendWorldRenderer(self: BufferBuilder): ExtendedWorldRenderer = new ExtendedWorldRenderer(self)
 
-  private class ExtendedWorldRenderer(val worldRenderer: WorldRenderer) {
-    def normal(normal: Vec3): WorldRenderer = {
+  private class ExtendedWorldRenderer(val buffer: BufferBuilder) {
+    def normal(normal: Vec3d): BufferBuilder = {
       val normalized = normal.normalize()
-      worldRenderer.normal(normalized.xCoord.toFloat, normalized.yCoord.toFloat, normalized.zCoord.toFloat)
+      buffer.normal(normalized.x.toFloat, normalized.y.toFloat, normalized.z.toFloat)
     }
   }
 
   private def drawTop(): Unit = {
     val t = Tessellator.getInstance
-    val r = t.getWorldRenderer
+    val r = t.getBuffer
 
     r.begin(GL11.GL_TRIANGLE_FAN, POSITION_TEX_NORMALF)
 
-    r.pos(0.5f, 1, 0.5f).tex(0.25f, 0.25f).normal(new Vec3(0, 0.2, 1)).endVertex()
-    r.pos(l, gt, h).tex(0, 0.5f).normal(new Vec3(0, 0.2, 1)).endVertex()
-    r.pos(h, gt, h).tex(0.5f, 0.5f).normal(new Vec3(0, 0.2, 1)).endVertex()
-    r.pos(h, gt, l).tex(0.5f, 0).normal(new Vec3(1, 0.2, 0)).endVertex()
-    r.pos(l, gt, l).tex(0, 0).normal(new Vec3(0, 0.2, -1)).endVertex()
-    r.pos(l, gt, h).tex(0, 0.5f).normal(new Vec3(-1, 0.2, 0)).endVertex()
+    r.pos(0.5f, 1, 0.5f).tex(0.25f, 0.25f).normal(new Vec3d(0, 0.2, 1)).endVertex()
+    r.pos(l, gt, h).tex(0, 0.5f).normal(new Vec3d(0, 0.2, 1)).endVertex()
+    r.pos(h, gt, h).tex(0.5f, 0.5f).normal(new Vec3d(0, 0.2, 1)).endVertex()
+    r.pos(h, gt, l).tex(0.5f, 0).normal(new Vec3d(1, 0.2, 0)).endVertex()
+    r.pos(l, gt, l).tex(0, 0).normal(new Vec3d(0, 0.2, -1)).endVertex()
+    r.pos(l, gt, h).tex(0, 0.5f).normal(new Vec3d(-1, 0.2, 0)).endVertex()
 
     t.draw()
 
@@ -105,16 +103,16 @@ object RobotRenderer extends TileEntitySpecialRenderer[tileentity.RobotProxy] {
 
   private def drawBottom(): Unit = {
     val t = Tessellator.getInstance
-    val r = t.getWorldRenderer
+    val r = t.getBuffer
 
     r.begin(GL11.GL_TRIANGLE_FAN, POSITION_TEX_NORMALF)
 
-    r.pos(0.5f, 0.03f, 0.5f).tex(0.75f, 0.25f).normal(new Vec3(0, -0.2, 1)).endVertex()
-    r.pos(l, gb, l).tex(0.5f, 0).normal(new Vec3(0, -0.2, 1)).endVertex()
-    r.pos(h, gb, l).tex(1, 0).normal(new Vec3(0, -0.2, 1)).endVertex()
-    r.pos(h, gb, h).tex(1, 0.5f).normal(new Vec3(1, -0.2, 0)).endVertex()
-    r.pos(l, gb, h).tex(0.5f, 0.5f).normal(new Vec3(0, -0.2, -1)).endVertex()
-    r.pos(l, gb, l).tex(0.5f, 0).normal(new Vec3(-1, -0.2, 0)).endVertex()
+    r.pos(0.5f, 0.03f, 0.5f).tex(0.75f, 0.25f).normal(new Vec3d(0, -0.2, 1)).endVertex()
+    r.pos(l, gb, l).tex(0.5f, 0).normal(new Vec3d(0, -0.2, 1)).endVertex()
+    r.pos(h, gb, l).tex(1, 0).normal(new Vec3d(0, -0.2, 1)).endVertex()
+    r.pos(h, gb, h).tex(1, 0.5f).normal(new Vec3d(1, -0.2, 0)).endVertex()
+    r.pos(l, gb, h).tex(0.5f, 0.5f).normal(new Vec3d(0, -0.2, -1)).endVertex()
+    r.pos(l, gb, l).tex(0.5f, 0).normal(new Vec3d(-1, -0.2, 0)).endVertex()
 
     t.draw()
 
@@ -252,6 +250,7 @@ object RobotRenderer extends TileEntitySpecialRenderer[tileentity.RobotProxy] {
 
         {
           // Additive blending for the light.
+          RenderState.makeItBlend()
           GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE)
           // Light color.
           val lightColor = if (robot != null && robot.info != null) robot.info.lightColor else 0xF23030
@@ -262,7 +261,7 @@ object RobotRenderer extends TileEntitySpecialRenderer[tileentity.RobotProxy] {
         }
 
         val t = Tessellator.getInstance
-        val r = t.getWorldRenderer
+        val r = t.getBuffer
         r.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX)
         r.pos(l, gt, l).tex(u0, v0).endVertex()
         r.pos(l, gb, l).tex(u0, v1).endVertex()
@@ -285,15 +284,15 @@ object RobotRenderer extends TileEntitySpecialRenderer[tileentity.RobotProxy] {
         r.pos(l, gt, l).tex(u1, v0).endVertex()
         t.draw()
 
+        RenderState.disableBlend()
         RenderState.enableEntityLighting()
       }
       GlStateManager.color(1, 1, 1, 1)
-      GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA)
     }
   }
 
-  override def renderTileEntityAt(proxy: tileentity.RobotProxy, x: Double, y: Double, z: Double, f: Float, damage: Int) {
-    RenderState.checkError(getClass.getName + ".renderTileEntityAt: entering (aka: wasntme)")
+  override def render(proxy: tileentity.RobotProxy, x: Double, y: Double, z: Double, f: Float, damage: Int, alpha: Float) {
+    RenderState.checkError(getClass.getName + ".render: entering (aka: wasntme)")
 
     val robot = proxy.robot
     val worldTime = robot.getWorld.getTotalWorldTime + f
@@ -346,8 +345,8 @@ object RobotRenderer extends TileEntitySpecialRenderer[tileentity.RobotProxy] {
 
     if (MinecraftForgeClient.getRenderPass == 0 && !robot.renderingErrored && x * x + y * y + z * z < 24 * 24) {
       val itemRenderer = Minecraft.getMinecraft.getItemRenderer
-      Option(robot.getStackInSlot(0)) match {
-        case Some(stack) =>
+      StackOption(robot.getStackInSlot(0)) match {
+        case SomeStack(stack) =>
 
           RenderState.pushAttrib()
           GlStateManager.pushMatrix()
@@ -370,35 +369,40 @@ object RobotRenderer extends TileEntitySpecialRenderer[tileentity.RobotProxy] {
             }
 
             val item = stack.getItem
-            val minecraft = Minecraft.getMinecraft
-
-            if (item.isInstanceOf[ItemBlock] && minecraft.getBlockRendererDispatcher.isRenderTypeChest(Block.getBlockFromItem(item), stack.getMetadata)) {
-              GlStateManager.translate(0.0F, 0.1875F, -0.3125F)
-              GlStateManager.rotate(20.0F, 1.0F, 0.0F, 0.0F)
-              GlStateManager.rotate(45.0F, 0.0F, 1.0F, 0.0F)
-              val scale = 0.375F
-              GlStateManager.scale(scale, -scale, scale)
+            if (item.isInstanceOf[ItemBlock]) {
+              GlStateManager.rotate(-90.0F, 1.0F, 0.0F, 0.0F)
+              GlStateManager.rotate(180.0F, 0.0F, 1.0F, 0.0F)
+              val scale = 0.625F
+              GlStateManager.scale(scale, scale, scale)
             }
-            else if (item eq Items.bow) {
-              GlStateManager.translate(-0.1F, -0.125F, -0.1f)
+            else if (item == Items.BOW) {
+              GlStateManager.translate(1.5f/16f, -0.125F, -0.125F)
+              GlStateManager.rotate(10.0F, 0.0F, 0.0F, 1.0F)
               val scale = 0.625F
               GlStateManager.scale(scale, -scale, scale)
-              GlStateManager.rotate(-90.0F, 1.0F, 0.0F, 0.0F)
-              GlStateManager.rotate(10.0F, 0.0F, 1.0F, 0.0F)
             }
             else if (item.isFull3D) {
               if (item.shouldRotateAroundWhenRendering) {
                 GlStateManager.rotate(180.0F, 0.0F, 0.0F, 1.0F)
-                GlStateManager.translate(0.0F, -0.125F, 0.0F)
+                GlStateManager.translate(0.0F, -0.0625F, 0.0F)
               }
-              GlStateManager.translate(0.0F, 0.1F, 0.0F)
+
+              GlStateManager.translate(0.0F, 0.1875F, 0.0F)
+              GlStateManager.translate(0.0625F, -0.125F, -2/16F)
               val scale = 0.625F
               GlStateManager.scale(scale, -scale, scale)
-              GlStateManager.rotate(-2.0F, 0.0F, 1.0F, 0.0F)
-              GlStateManager.rotate(-5.0F, 0.0F, 0.0F, 1.0F)
+              GlStateManager.rotate(0.0F, 1.0F, 0.0F, 0.0F)
+              GlStateManager.rotate(0.0F, 0.0F, 1.0F, 0.0F)
+            }
+            else {
+              GlStateManager.translate(0, 2f/16f, 0)
+              val scale = 0.875F
+              GlStateManager.scale(scale, scale, scale)
+              GlStateManager.rotate(90.0F, 0.0F, 1.0F, 0.0F)
+              GlStateManager.rotate(180.0F, 0.0F, 0.0F, 1.0F)
             }
 
-            itemRenderer.renderItem(Minecraft.getMinecraft.thePlayer, stack, TransformType.THIRD_PERSON)
+            itemRenderer.renderItem(Minecraft.getMinecraft.player, stack, TransformType.THIRD_PERSON_RIGHT_HAND)
           }
           catch {
             case e: Throwable =>
@@ -418,7 +422,7 @@ object RobotRenderer extends TileEntitySpecialRenderer[tileentity.RobotProxy] {
         lazy val slotMapping = Array.fill(mountPoints.length)(null: (ItemStack, UpgradeRenderer))
 
         val renderers = (robot.componentSlots ++ robot.containerSlots).map(robot.getStackInSlot).
-          collect { case stack if stack != null && stack.getItem.isInstanceOf[UpgradeRenderer] => (stack, stack.getItem.asInstanceOf[UpgradeRenderer]) }
+          collect { case stack if !stack.isEmpty && stack.getItem.isInstanceOf[UpgradeRenderer] => (stack, stack.getItem.asInstanceOf[UpgradeRenderer]) }
 
         for ((stack, renderer) <- renderers) {
           val preferredSlot = renderer.computePreferredMountPoint(stack, robot, availableSlots)
@@ -453,12 +457,12 @@ object RobotRenderer extends TileEntitySpecialRenderer[tileentity.RobotProxy] {
     GlStateManager.popMatrix()
 
     val name = robot.name
-    if (Settings.get.robotLabels && MinecraftForgeClient.getRenderPass == 1 && !Strings.isNullOrEmpty(name) && x * x + y * y + z * z < RendererLivingEntity.NAME_TAG_RANGE) {
+    if (Settings.get.robotLabels && MinecraftForgeClient.getRenderPass == 1 && !Strings.isNullOrEmpty(name) && x * x + y * y + z * z < RenderLivingBase.NAME_TAG_RANGE) {
       GlStateManager.pushMatrix()
 
       // This is pretty much copy-pasta from the entity's label renderer.
       val t = Tessellator.getInstance
-      val r = t.getWorldRenderer
+      val r = t.getBuffer
       val f = getFontRenderer
       val scale = 1.6f / 60f
       val width = f.getStringWidth(name)
@@ -485,7 +489,7 @@ object RobotRenderer extends TileEntitySpecialRenderer[tileentity.RobotProxy] {
       t.draw()
 
       GlStateManager.enableTexture2D() // For the font.
-      f.drawString((if (EventHandler.isItTime) EnumChatFormatting.OBFUSCATED.toString else "") + name, -halfWidth, 0, 0xFFFFFFFF)
+      f.drawString((if (EventHandler.isItTime) TextFormatting.OBFUSCATED.toString else "") + name, -halfWidth, 0, 0xFFFFFFFF)
 
       GlStateManager.depthMask(true)
       GlStateManager.enableLighting()
@@ -497,6 +501,6 @@ object RobotRenderer extends TileEntitySpecialRenderer[tileentity.RobotProxy] {
     GlStateManager.popMatrix()
     RenderState.popAttrib()
 
-    RenderState.checkError(getClass.getName + ".renderTileEntityAt: leaving")
+    RenderState.checkError(getClass.getName + ".render: leaving")
   }
 }

@@ -34,7 +34,8 @@ object PetRenderer {
     "23c7ed71-fb13-4abe-abe7-f355e1de6e62" ->(0.3, 0.3, 1.0), // LizzyTheSiren
     "076541f1-f10a-46de-a127-dfab8adfbb75" ->(0.2, 1.0, 0.1), // vifino
     "e7e90198-0ccf-4662-a827-192ec8f4419d" ->(0.0, 0.2, 0.6), // Izaya
-    "f514ee69-7bbb-4e46-9e94-d8176324cec2" ->(0.098, 0.471, 0.784) // Wobbo
+    "f514ee69-7bbb-4e46-9e94-d8176324cec2" ->(0.098, 0.471, 0.784), // Wobbo
+    "f812c043-78ba-4324-82ae-e8f05c52ae6e" ->(0.1, 0.8, 0.5) // payonel
   )
 
   private val petLocations = com.google.common.cache.CacheBuilder.newBuilder().
@@ -46,42 +47,41 @@ object PetRenderer {
 
   @SubscribeEvent
   def onPlayerRender(e: RenderPlayerEvent.Pre) {
-    val uuid = e.entityPlayer.getUniqueID.toString
+    val uuid = e.getEntityPlayer.getUniqueID.toString
     if (hidden.contains(uuid) || !entitledPlayers.contains(uuid)) return
     rendering = Some(entitledPlayers(uuid))
 
-    val worldTime = e.entityPlayer.getEntityWorld.getTotalWorldTime
-    val timeJitter = e.entityPlayer.hashCode ^ 0xFF
+    val worldTime = e.getEntityPlayer.getEntityWorld.getTotalWorldTime
+    val timeJitter = e.getEntityPlayer.hashCode ^ 0xFF
     val offset = timeJitter + worldTime / 20.0
-    val hover = (math.sin(timeJitter + (worldTime + e.partialRenderTick) / 20.0) * 0.03).toFloat
+    val hover = (math.sin(timeJitter + (worldTime + e.getPartialRenderTick) / 20.0) * 0.03).toFloat
 
-    val location = petLocations.get(e.entityPlayer, new Callable[PetLocation] {
-      override def call() = new PetLocation(e.entityPlayer)
+    val location = petLocations.get(e.getEntityPlayer, new Callable[PetLocation] {
+      override def call() = new PetLocation(e.getEntityPlayer)
     })
 
     GlStateManager.pushMatrix()
     RenderState.pushAttrib()
-    val localPos = Minecraft.getMinecraft.thePlayer.getPositionEyes(e.partialRenderTick)
-    val playerPos = e.entityPlayer.getPositionEyes(e.partialRenderTick)
-    val correction = 1.62 - (if (e.entityPlayer.isSneaking) 0.125 else 0)
+    val localPos = Minecraft.getMinecraft.player.getPositionEyes(e.getPartialRenderTick)
+    val playerPos = e.getEntityPlayer.getPositionEyes(e.getPartialRenderTick)
+    val correction = 1.62 - (if (e.getEntityPlayer.isSneaking) 0.125 else 0)
     GlStateManager.translate(
-      playerPos.xCoord - localPos.xCoord,
-      playerPos.yCoord - localPos.yCoord + correction,
-      playerPos.zCoord - localPos.zCoord)
+      playerPos.x - localPos.x,
+      playerPos.y - localPos.y + correction,
+      playerPos.z - localPos.z)
 
     RenderState.enableEntityLighting()
     GlStateManager.disableBlend()
     GlStateManager.enableRescaleNormal()
     GlStateManager.color(1, 1, 1, 1)
 
-    location.applyInterpolatedTransformations(e.partialRenderTick)
+    location.applyInterpolatedTransformations(e.getPartialRenderTick)
 
     GlStateManager.scale(0.3f, 0.3f, 0.3f)
     GlStateManager.translate(0, hover, 0)
 
     RobotRenderer.renderChassis(null, offset, isRunningOverride = true)
 
-    RenderState.disableEntityLighting()
     GlStateManager.disableRescaleNormal()
 
     RenderState.popAttrib()
@@ -143,7 +143,7 @@ object PetRenderer {
       GlStateManager.translate(0.3, -0.1, -0.2)
     }
 
-    private def isForInventory = Minecraft.getMinecraft.currentScreen != null && owner == Minecraft.getMinecraft.thePlayer
+    private def isForInventory = Minecraft.getMinecraft.currentScreen != null && owner == Minecraft.getMinecraft.player
   }
 
   @SubscribeEvent

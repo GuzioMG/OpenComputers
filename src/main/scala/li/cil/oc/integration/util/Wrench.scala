@@ -5,7 +5,7 @@ import java.lang.reflect.Method
 import li.cil.oc.common.IMC
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.item.ItemStack
-import net.minecraft.util.BlockPos
+import net.minecraft.util.math.BlockPos
 
 import scala.collection.mutable
 
@@ -17,11 +17,11 @@ object Wrench {
 
   def addCheck(checker: Method): Unit = checks += checker
 
-  def isWrench(stack: ItemStack): Boolean = stack != null && checks.exists(IMC.tryInvokeStatic(_, stack)(false))
+  def isWrench(stack: ItemStack): Boolean = !stack.isEmpty && checks.exists(IMC.tryInvokeStatic(_, stack)(false))
 
   def holdsApplicableWrench(player: EntityPlayer, position: BlockPos): Boolean =
-    player.getCurrentEquippedItem != null && usages.exists(IMC.tryInvokeStatic(_, player, position, java.lang.Boolean.FALSE)(false))
+    !player.getHeldItemMainhand.isEmpty && usages.exists(IMC.tryInvokeStatic(_, player, position, java.lang.Boolean.FALSE)(false))
 
   def wrenchUsed(player: EntityPlayer, position: BlockPos): Unit =
-    if (player.getHeldItem != null) usages.foreach(IMC.tryInvokeStaticVoid(_, player, position, java.lang.Boolean.TRUE))
+    if (!player.getHeldItemMainhand.isEmpty) usages.foreach(IMC.tryInvokeStaticVoid(_, player, position, java.lang.Boolean.TRUE))
 }

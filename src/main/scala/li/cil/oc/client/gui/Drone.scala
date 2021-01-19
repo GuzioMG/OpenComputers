@@ -97,12 +97,12 @@ class Drone(playerInventory: InventoryPlayer, val drone: entity.Drone) extends D
         drone.globalBuffer * 100 / math.max(drone.globalBufferSize, 1),
         drone.globalBuffer,
         drone.globalBufferSize))
-      copiedDrawHoveringText(tooltip, mouseX - guiLeft, mouseY - guiTop, fontRendererObj)
+      copiedDrawHoveringText(tooltip, mouseX - guiLeft, mouseY - guiTop, fontRenderer)
     }
     if (powerButton.isMouseOver) {
       val tooltip = new java.util.ArrayList[String]
       tooltip.addAll(asJavaCollection(if (drone.isRunning) Localization.Computer.TurnOff.lines.toIterable else Localization.Computer.TurnOn.lines.toIterable))
-      copiedDrawHoveringText(tooltip, mouseX - guiLeft, mouseY - guiTop, fontRendererObj)
+      copiedDrawHoveringText(tooltip, mouseX - guiLeft, mouseY - guiTop, fontRenderer)
     }
     RenderState.popAttrib()
   }
@@ -134,7 +134,7 @@ class Drone(playerInventory: InventoryPlayer, val drone: entity.Drone) extends D
       val y = guiTop + inventoryY - 1 + (slot / 4) * (selectionSize - 2)
 
       val t = Tessellator.getInstance
-      val r = t.getWorldRenderer
+      val r = t.getBuffer
       r.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX)
       r.pos(x, y, zLevel).tex(0, offsetV).endVertex()
       r.pos(x, y + selectionSize, zLevel).tex(0, offsetV + selectionStepV).endVertex()

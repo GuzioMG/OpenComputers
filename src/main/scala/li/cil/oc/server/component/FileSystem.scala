@@ -19,6 +19,7 @@ import li.cil.oc.api.machine.Context
 import li.cil.oc.api.network.EnvironmentHost
 import li.cil.oc.api.network._
 import li.cil.oc.api.prefab
+import li.cil.oc.api.prefab.AbstractManagedEnvironment
 import li.cil.oc.api.prefab.AbstractValue
 import li.cil.oc.common.SaveHandler
 import li.cil.oc.server.{PacketSender => ServerPacketSender}
@@ -31,7 +32,7 @@ import net.minecraftforge.common.util.Constants.NBT
 import scala.collection.convert.WrapAsJava._
 import scala.collection.mutable
 
-class FileSystem(val fileSystem: IFileSystem, var label: Label, val host: Option[EnvironmentHost], val sound: Option[String], val speed: Int) extends prefab.ManagedEnvironment with DeviceInfo {
+class FileSystem(val fileSystem: IFileSystem, var label: Label, val host: Option[EnvironmentHost], val sound: Option[String], val speed: Int) extends AbstractManagedEnvironment with DeviceInfo {
   override val node = Network.newNode(this, Visibility.Network).
     withComponent("filesystem", Visibility.Neighbors).
     withConnector().
@@ -245,6 +246,11 @@ class FileSystem(val fileSystem: IFileSystem, var label: Label, val host: Option
   def checkHandle(args: Arguments, index: Int) = {
     if (args.isInteger(index)) {
       args.checkInteger(index)
+    } else if (args.isTable(index)) {
+      args.checkTable(index).get("handle") match {
+        case handle: Number => handle.intValue()
+        case _ => throw new IOException("bad file descriptor")
+      }
     } else args.checkAny(index) match {
       case handle: HandleValue => handle.handle
       case _ => throw new IOException("bad file descriptor")
@@ -386,16 +392,19 @@ final class HandleValue extends AbstractValue {
     }
   }
 
+  private val OwnerTag = "owner"
+  private val HandleTag = "handle"
+
   override def load(nbt: NBTTagCompound): Unit = {
     super.load(nbt)
-    owner = nbt.getString("owner")
-    handle = nbt.getInteger("handle")
+    owner = nbt.getString(OwnerTag)
+    handle = nbt.getInteger(HandleTag)
   }
 
   override def save(nbt: NBTTagCompound): Unit = {
     super.save(nbt)
-    nbt.setInteger("handle", handle)
-    nbt.setString("owner", owner)
+    nbt.setString(OwnerTag, owner)
+    nbt.setInteger(HandleTag, handle)
   }
 
   override def toString: String = handle.toString

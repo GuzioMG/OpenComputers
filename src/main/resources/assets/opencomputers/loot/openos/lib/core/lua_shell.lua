@@ -1,5 +1,5 @@
 local package = require("package")
-local tty = require("tty")
+local term = require("term")
 
 local function optrequire(...)
   local success, module = pcall(require, ...)
@@ -91,9 +91,9 @@ io.write("\27[33mEnter a statement and hit enter to evaluate it.\n")
 io.write("Prefix an expression with '=' to show its value.\n")
 io.write("Press Ctrl+D to exit the interpreter.\n\27[37m")
 
-while tty.isAvailable() do
+while term.isAvailable() do
   io.write(env._PROMPT)
-  local command = tty.read(read_handler)
+  local command = term.read(read_handler)
   if not command then -- eof
     return
   end
@@ -101,7 +101,10 @@ while tty.isAvailable() do
   if string.sub(command, 1, 1) == "=" then
     code, reason = load("return " .. string.sub(command, 2), "=stdin", "t", env)
   else
-    code, reason = load(command, "=stdin", "t", env)
+    code, reason = load("return " .. command, "=stdin", "t", env)
+    if not code then
+      code, reason = load(command, "=stdin", "t", env)
+    end
   end
   if code then
     local result = table.pack(xpcall(code, debug.traceback))
@@ -111,11 +114,13 @@ while tty.isAvailable() do
       end
       io.stderr:write(tostring(result[2]) .. "\n")
     else
-      for i = 2, result.n do
-        io.write(require("serialization").serialize(result[i], true) .. "\t")
-      end
-      if tty.getCursor() > 1 then
-        io.write("\n")
+      local ok, why = pcall(function()
+        for i = 2, result.n do
+          io.write(require("serialization").serialize(result[i], true), i < result.n and "\t" or "\n")
+        end
+      end)
+      if not ok then
+        io.stderr:write("crashed serializing result: ", tostring(why))
       end
     end
   else

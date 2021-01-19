@@ -26,7 +26,12 @@ import net.minecraftforge.fml.relauncher.SideOnly
 import scala.collection.convert.WrapAsJava._
 
 class Case(var tier: Int) extends traits.PowerAcceptor with traits.Computer with traits.Colored with internal.Case with DeviceInfo {
-  def this() = this(0)
+  def this() = {
+    this(0)
+    // If no tier was defined when constructing this case, then we don't yet know the inventory size
+    // this is set back to true when the nbt data is loaded
+    isSizeInventoryReady = false
+  }
 
   // Used on client side to check whether to render disk activity/network indicators.
   var lastFileSystemAccess = 0L
@@ -62,7 +67,7 @@ class Case(var tier: Int) extends traits.PowerAcceptor with traits.Computer with
   // ----------------------------------------------------------------------- //
 
   override def updateEntity() {
-    if (isServer && isCreative && world.getTotalWorldTime % Settings.get.tickFrequency == 0) {
+    if (isServer && isCreative && getWorld.getTotalWorldTime % Settings.get.tickFrequency == 0) {
       // Creative case, make it generate power.
       node.asInstanceOf[Connector].changeBuffer(Double.PositiveInfinity)
     }
@@ -74,19 +79,30 @@ class Case(var tier: Int) extends traits.PowerAcceptor with traits.Computer with
   override protected def onRunningChanged(): Unit = {
     super.onRunningChanged()
     getBlockType match {
-      case block: common.block.Case => world.setBlockState(getPos, world.getBlockState(getPos).withProperty(PropertyRunning.Running, Boolean.box(isRunning)))
+      case block: common.block.Case => {
+        val state = getWorld.getBlockState(getPos)
+        // race condition that the world no longer has this block at the position (e.g. it was broken)
+        if (block == state.getBlock) {
+          getWorld.setBlockState(getPos, state.withProperty(PropertyRunning.Running, Boolean.box(isRunning)))
+        }
+      }
       case _ =>
     }
   }
 
+  // ----------------------------------------------------------------------- //
+
+  private final val TierTag = Settings.namespace + "tier"
+
   override def readFromNBTForServer(nbt: NBTTagCompound) {
-    tier = nbt.getByte(Settings.namespace + "tier") max 0 min 3
+    tier = nbt.getByte(TierTag) max 0 min 3
     setColor(Color.rgbValues(Color.byTier(tier)))
     super.readFromNBTForServer(nbt)
+    isSizeInventoryReady = true
   }
 
   override def writeToNBTForServer(nbt: NBTTagCompound) {
-    nbt.setByte(Settings.namespace + "tier", tier.toByte)
+    nbt.setByte(TierTag, tier.toByte)
     super.writeToNBTForServer(nbt)
   }
 
@@ -116,8 +132,8 @@ class Case(var tier: Int) extends traits.PowerAcceptor with traits.Computer with
 
   override def getSizeInventory = if (tier < 0 || tier >= InventorySlots.computer.length) 0 else InventorySlots.computer(tier).length
 
-  override def isUseableByPlayer(player: EntityPlayer) =
-    super.isUseableByPlayer(player) && (!isCreative || player.capabilities.isCreativeMode)
+  override def isUsableByPlayer(player: EntityPlayer) =
+    super.isUsableByPlayer(player) && (!isCreative || player.capabilities.isCreativeMode)
 
   override def isItemValidForSlot(slot: Int, stack: ItemStack) =
     Option(Driver.driverFor(stack, getClass)).fold(false)(driver => {

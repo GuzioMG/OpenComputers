@@ -3,7 +3,7 @@ package li.cil.oc.common.inventory
 import li.cil.oc.OpenComputers
 import li.cil.oc.api
 import li.cil.oc.api.Driver
-import li.cil.oc.api.driver.{Item => ItemDriver}
+import li.cil.oc.api.driver.{DriverItem => ItemDriver}
 import li.cil.oc.api.network
 import li.cil.oc.api.network.EnvironmentHost
 import li.cil.oc.api.network.ManagedEnvironment
@@ -17,7 +17,16 @@ import scala.collection.convert.WrapAsScala._
 import scala.collection.mutable
 
 trait ComponentInventory extends Inventory with network.Environment {
-  lazy val components = Array.fill[Option[ManagedEnvironment]](getSizeInventory)(None)
+  private var _components: Array[Option[ManagedEnvironment]] = _
+  protected var isSizeInventoryReady: Boolean = true
+
+  def components: Array[Option[ManagedEnvironment]] = {
+    if (_components == null && isSizeInventoryReady) {
+      _components = Array.fill[Option[ManagedEnvironment]](getSizeInventory)(None)
+    }
+    if (_components == null) Array[Option[ManagedEnvironment]]() else _components
+  }
+
   protected val updatingComponents = mutable.ArrayBuffer.empty[ManagedEnvironment]
 
   // ----------------------------------------------------------------------- //
@@ -46,7 +55,7 @@ trait ComponentInventory extends Inventory with network.Environment {
   def connectComponents() {
     for (slot <- 0 until getSizeInventory if slot >= 0 && slot < components.length) {
       val stack = getStackInSlot(slot)
-      if (stack != null && components(slot).isEmpty && isComponentSlot(slot, stack)) {
+      if (!stack.isEmpty && components(slot).isEmpty && isComponentSlot(slot, stack)) {
         components(slot) = Option(Driver.driverFor(stack)) match {
           case Some(driver) =>
             Option(driver.createEnvironment(stack, host)) match {
@@ -98,12 +107,20 @@ trait ComponentInventory extends Inventory with network.Environment {
   def saveComponents() {
     for (slot <- 0 until getSizeInventory) {
       val stack = getStackInSlot(slot)
-      if (stack != null) {
-        components(slot) match {
-          case Some(component) =>
-            // We're guaranteed to have a driver for entries.
-            save(component, Driver.driverFor(stack), stack)
-          case _ => // Nothing special to save.
+      if (!stack.isEmpty) {
+        if (slot >= components.length) {
+          // isSizeInventoryReady was added to resolve issues where an inventory was used before its
+          // nbt data had been parsed. See https://github.com/MightyPirates/OpenComputers/issues/2522
+          // If this error is hit again, perhaps another subtype needs to handle nbt loading like Case does
+          OpenComputers.log.error(s"ComponentInventory components length ${components.length} does not accommodate inventory size ${getSizeInventory}")
+          return
+        } else {
+          components(slot) match {
+            case Some(component) =>
+              // We're guaranteed to have a driver for entries.
+              save(component, Driver.driverFor(stack), stack)
+            case _ => // Nothing special to save.
+          }
         }
       }
     }
@@ -113,7 +130,7 @@ trait ComponentInventory extends Inventory with network.Environment {
 
   override def getInventoryStackLimit = 1
 
-  override protected def onItemAdded(slot: Int, stack: ItemStack) = if (isComponentSlot(slot, stack)) {
+  override protected def onItemAdded(slot: Int, stack: ItemStack) = if (slot >= 0 && slot < components.length && isComponentSlot(slot, stack)) {
     Option(Driver.driverFor(stack)).foreach(driver =>
       Option(driver.createEnvironment(stack, host)) match {
         case Some(component) => this.synchronized {
@@ -137,7 +154,7 @@ trait ComponentInventory extends Inventory with network.Environment {
       })
   }
 
-  override protected def onItemRemoved(slot: Int, stack: ItemStack) {
+  override protected def onItemRemoved(slot: Int, stack: ItemStack): Unit = if (slot >= 0 && slot < components.length) {
     // Uninstall component previously in that slot.
     components(slot) match {
       case Some(component) => this.synchronized {

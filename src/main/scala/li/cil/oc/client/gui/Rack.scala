@@ -14,6 +14,8 @@ import net.minecraft.entity.player.InventoryPlayer
 import net.minecraft.util.EnumFacing
 import org.lwjgl.opengl.GL11
 
+import scala.collection.convert.WrapAsJava.asJavaCollection
+
 class Rack(playerInventory: InventoryPlayer, val rack: tileentity.Rack) extends DynamicGuiContainer(new container.Rack(playerInventory, rack)) {
   ySize = 210
 
@@ -163,7 +165,7 @@ class Rack(playerInventory: InventoryPlayer, val rack: tileentity.Rack) extends 
     super.drawSecondaryForegroundLayer(mouseX, mouseY)
     RenderState.pushAttrib() // Prevents NEI render glitch.
 
-    fontRendererObj.drawString(
+    fontRenderer.drawString(
       Localization.localizeImmediately(rack.getName),
       8, 6, 0x404040)
 
@@ -246,9 +248,15 @@ class Rack(playerInventory: InventoryPlayer, val rack: tileentity.Rack) extends 
       val x = 122
       val y = 20 + bus * 11
 
-      fontRendererObj.drawString(
+      fontRenderer.drawString(
         Localization.localizeImmediately(sideName(busToSide(bus))),
         x, y, 0x404040)
+    }
+
+    if (relayButton.isMouseOver) {
+      val tooltip = new java.util.ArrayList[String]
+      tooltip.addAll(asJavaCollection(Localization.Rack.RelayModeTooltip.lines.toIterable))
+      copiedDrawHoveringText(tooltip, mouseX - guiLeft, mouseY - guiTop, fontRenderer)
     }
 
     RenderState.popAttrib()
@@ -266,7 +274,7 @@ class Rack(playerInventory: InventoryPlayer, val rack: tileentity.Rack) extends 
     val u1 = u0 + w / 256f
     val v1 = v0 + h / 256f
     val t = Tessellator.getInstance()
-    val r = t.getWorldRenderer
+    val r = t.getBuffer
     r.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX)
     r.pos(x, y, windowZ).tex(u0, v0).endVertex()
     r.pos(x, y + h, windowZ).tex(u0, v1).endVertex()

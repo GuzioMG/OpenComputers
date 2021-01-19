@@ -1,6 +1,47 @@
-local hookInterval = 100
+local hookInterval = 10000
+local function calcHookInterval()
+	local bogomipsDivider = 0.05
+	local bogomipsDeadline = computer.realTime() + bogomipsDivider
+	local ipsCount = 0
+	local bogomipsBusy = true
+	local function calcBogoMips()
+		ipsCount = ipsCount + hookInterval
+		if computer.realTime() > bogomipsDeadline then
+			bogomipsBusy = false
+		end
+	end
+	-- The following is a bit of nonsensical-seeming code attempting
+	-- to cover Lua's VM sufficiently for the IPS calculation.
+	local bogomipsTmpA = {{["b"]=3, ["d"]=9}}
+	local function c(k)
+		if k <= 2 then
+			bogomipsTmpA[1].d = k / 2.0
+		end
+	end
+	debug.sethook(calcBogoMips, "", hookInterval)
+	while bogomipsBusy do
+		local st = ""
+		for k=2,4 do
+			st = st .. "a" .. k
+			c(k)
+			if k >= 3 then
+				bogomipsTmpA[1].b = bogomipsTmpA[1].b * (k ^ k)
+			end
+		end
+	end
+	debug.sethook()
+	return ipsCount / bogomipsDivider
+end
+
+local ipsCount = calcHookInterval()
+-- Since our IPS might still be too generous (hookInterval needs to run at most
+-- every 0.05 seconds), we divide it further by 10 relative to that.
+hookInterval = (ipsCount * 0.005)
+if hookInterval < 1000 then hookInterval = 1000 end
+
 local deadline = math.huge
 local hitDeadline = false
+local tooLongWithoutYielding = setmetatable({},  { __tostring = function() return "too long without yielding" end})
 local function checkDeadline()
   if computer.realTime() > deadline then
     debug.sethook(coroutine.running(), checkDeadline, "", 1)
@@ -8,8 +49,15 @@ local function checkDeadline()
       deadline = deadline + 0.5
     end
     hitDeadline = true
-    error("too long without yielding", 0)
+    error(tooLongWithoutYielding)
   end
+end
+local function pcallTimeoutCheck(...)
+  local ok, timeout = ...
+  if rawequal(timeout, tooLongWithoutYielding) then
+    return ok, tostring(tooLongWithoutYielding)
+  end
+  return ...
 end
 
 -------------------------------------------------------------------------------
@@ -699,9 +747,7 @@ sandbox = {
   next = next,
   pairs = pairs,
   pcall = function(...)
-    local result = table.pack(pcall(...))
-    checkDeadline()
-    return table.unpack(result, 1, result.n)
+    return pcallTimeoutCheck(pcall(...))
   end,
   print = nil, -- in boot/*_base.lua
   rawequal = rawequal,
@@ -745,18 +791,23 @@ sandbox = {
   tonumber = tonumber,
   tostring = tostring,
   type = type,
-  _VERSION = _VERSION:match("5.3") and "Lua 5.3" or "Lua 5.2",
+  _VERSION = _VERSION:match("Luaj") and "Luaj" or _VERSION:match("5.3") and "Lua 5.3" or "Lua 5.2",
   xpcall = function(f, msgh, ...)
     local handled = false
+    checkArg(2, msgh, "function")
     local result = table.pack(xpcall(f, function(...)
-      if handled then
+      if rawequal((...), tooLongWithoutYielding) then
+        return tooLongWithoutYielding
+      elseif handled then
         return ...
       else
         handled = true
         return msgh(...)
       end
     end, ...))
-    checkDeadline()
+    if rawequal(result[2], tooLongWithoutYielding) then
+      result = table.pack(result[1], select(2, pcallTimeoutCheck(pcall(msgh, tostring(tooLongWithoutYielding)))))
+    end
     return table.unpack(result, 1, result.n)
   end,
 
@@ -938,7 +989,14 @@ sandbox = {
         }
       end
     end,
-    traceback = debug.traceback
+    traceback = debug.traceback,
+    -- using () to wrap the return of debug methods because in Lua doing this
+    -- causes only the first return value to be selected
+    -- e.g. (1, 2) is only (1), the 2 is not returned
+    -- this is critically important here because the 2nd return value from these
+    -- debug methods is the value itself, which opens a door to exploit the sandbox
+    getlocal = function(...) return (debug.getlocal(...)) end,
+    getupvalue = function(...) return (debug.getupvalue(...)) end,
   },
 
   -- Lua 5.3.
@@ -1456,4 +1514,4 @@ end
 
 -- JNLua converts the coroutine to a string immediately, so we can't get the
 -- traceback later. Because of that we have to do the error handling here.
-return pcall(main)
+return pcallTimeoutCheck(pcall(main))

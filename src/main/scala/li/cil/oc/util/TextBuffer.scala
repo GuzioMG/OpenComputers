@@ -166,6 +166,8 @@ class TextBuffer(var width: Int, var height: Int, initialFormat: PackedColor.Col
       case dx if tx > 0 => dx
       case dx => dx.swap
     }
+    val left_edge = math.min(dx0, dx1) - 1
+    if (left_edge >= width - 1) return false // no work
     val (dy0, dy1) = (math.max(0, math.min(height - 1, row + ty + h - 1)), math.max(0, math.min(height, row + ty))) match {
       case dy if ty > 0 => dy
       case dy => dy.swap
@@ -186,14 +188,49 @@ class TextBuffer(var width: Int, var height: Int, initialFormat: PackedColor.Col
               nl(nx) = ol(ox)
               nc(nx) = oc(ox)
               for (offset <- 1 until FontUtils.wcwidth(nl(nx))) {
-                nl(nx + offset) = ol(' ')
+                nl(nx + offset) = ' '
                 nc(nx + offset) = oc(nx)
               }
             case _ => /* Got no source column. */
           }
+          // any wide chars along the left edge of the target rectangle need to be cleared
+          // don't change their colors
+          if (left_edge >= 0 && FontUtils.wcwidth(nl(left_edge)) > 1) {
+            nl(left_edge) = ' '
+            changed = true
+          }
         case _ => /* Got no source row. */
       }
     }
+    changed
+  }
+
+  // copy a portion of another buffer into this buffer
+  def rawcopy(col: Int, row: Int, w: Int, h: Int, src: TextBuffer, fromCol: Int, fromRow: Int): Boolean = {
+    var changed: Boolean = false
+    val col_index = col - 1
+    val row_index = row - 1
+    for (yOffset <- 0 until h) {
+      val dstCharLine = buffer(row_index + yOffset)
+      val dstColorLine = color(row_index + yOffset)
+      for (xOffset <- 0 until w) {
+        val srcChar = src.buffer(fromRow + yOffset - 1)(fromCol + xOffset - 1)
+        var srcColor = src.color(fromRow + yOffset - 1)(fromCol + xOffset - 1)
+
+        if (this.format.depth != src.format.depth) {
+          val fg = PackedColor.Color(PackedColor.unpackForeground(srcColor, src.format))
+          val bg = PackedColor.Color(PackedColor.unpackBackground(srcColor, src.format))
+          srcColor = PackedColor.pack(fg, bg, format)
+        }
+
+        if (srcChar != dstCharLine(col_index + xOffset) || srcColor != dstColorLine(col_index + xOffset)) {
+          changed = true
+          dstCharLine(col_index + xOffset) = srcChar
+          dstColorLine(col_index + xOffset) = srcColor
+        }
+      }
+    }
+
     changed
   }
 
@@ -202,15 +239,15 @@ class TextBuffer(var width: Int, var height: Int, initialFormat: PackedColor.Col
       // Don't allow setting wide chars in right-most col.
       return
     }
-    if (x > 0 && line(x) == ' ' && FontUtils.wcwidth(line(x - 1)) > 1) {
-      // Don't allow setting the cell following a wide char.
-      return
-    }
     line(x) = c
     lineColor(x) = packed
     for (x1 <- x + 1 until x + FontUtils.wcwidth(c)) {
       line(x1) = ' '
       lineColor(x1) = packed
+    }
+    if (x > 0 && FontUtils.wcwidth(line(x - 1)) > 1) {
+      // remove previous wide char (but don't change its color)
+      line(x - 1) = ' '
     }
   }
 
@@ -232,15 +269,8 @@ class TextBuffer(var width: Int, var height: Int, initialFormat: PackedColor.Col
     foreground = PackedColor.Color(nbt.getInteger("foreground"), nbt.getBoolean("foregroundIsPalette"))
     background = PackedColor.Color(nbt.getInteger("background"), nbt.getBoolean("backgroundIsPalette"))
 
-    val c = nbt.getIntArray("color")
-    for (i <- 0 until h) {
-      val rowColor = color(i)
-      for (j <- 0 until w) {
-        val index = j + i * w
-        if (index < c.length) {
-          rowColor(j) = c(index).toShort
-        }
-      }
+    if (!NbtDataStream.getShortArray(nbt, "colors", color, w, h)) {
+      NbtDataStream.getIntArrayLegacy(nbt, "color", color, w, h)
     }
   }
 
@@ -261,10 +291,10 @@ class TextBuffer(var width: Int, var height: Int, initialFormat: PackedColor.Col
     nbt.setInteger("background", _background.value)
     nbt.setBoolean("backgroundIsPalette", _background.isPalette)
 
-    nbt.setTag("color", new NBTTagIntArray(color.flatten.map(_.toInt)))
+    NbtDataStream.setShortArray(nbt, "colors", color.flatten.map(_.toShort))
   }
 
-  override def toString = {
+  override def toString: String = {
     val b = StringBuilder.newBuilder
     if (buffer.length > 0) {
       b.appendAll(buffer(0))

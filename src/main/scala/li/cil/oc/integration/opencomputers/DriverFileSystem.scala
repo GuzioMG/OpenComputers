@@ -13,7 +13,7 @@ import li.cil.oc.common.item.FloppyDisk
 import li.cil.oc.common.item.HardDiskDrive
 import li.cil.oc.common.item.data.DriveData
 import li.cil.oc.server.component.Drive
-import li.cil.oc.server.fs.FileSystem.ItemLabel
+import li.cil.oc.server.fs.FileSystem.{ItemLabel, ReadOnlyLabel}
 import net.minecraft.item.ItemStack
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraftforge.common.DimensionManager
@@ -67,15 +67,19 @@ object DriverFileSystem extends Item {
       // node's address as the folder name... so we generate the address here,
       // if necessary. No one will know, right? Right!?
       val address = addressFromTag(dataTag(stack))
-      val label = new ReadWriteItemLabel(stack)
+      var label: api.fs.Label = new ReadWriteItemLabel(stack)
       val isFloppy = api.Items.get(stack) == api.Items.get(Constants.ItemName.Floppy)
       val sound = Settings.resourceDomain + ":" + (if (isFloppy) "floppy_access" else "hdd_access")
       val drive = new DriveData(stack)
       val environment = if (drive.isUnmanaged) {
-        new Drive(capacity max 0, platterCount, label, Option(host), Option(sound), speed)
+        new Drive(capacity max 0, platterCount, label, Option(host), Option(sound), speed, drive.isLocked)
       }
       else {
-        val fs = oc.api.FileSystem.fromSaveDirectory(address, capacity max 0, Settings.get.bufferChanges)
+        var fs = oc.api.FileSystem.fromSaveDirectory(address, capacity max 0, Settings.get.bufferChanges)
+        if (drive.isLocked) {
+          fs = oc.api.FileSystem.asReadOnly(fs)
+          label = new ReadOnlyLabel(label.getLabel)
+        }
         oc.api.FileSystem.asManagedEnvironment(fs, label, host, sound, speed)
       }
       if (environment != null && environment.node != null) {
@@ -108,15 +112,17 @@ object DriverFileSystem extends Item {
       label = Option(value).map(_.take(16))
     }
 
+    private final val LabelTag = Settings.namespace + "fs.label"
+
     override def load(nbt: NBTTagCompound) {
-      if (nbt.hasKey(Settings.namespace + "fs.label")) {
-        label = Option(nbt.getString(Settings.namespace + "fs.label"))
+      if (nbt.hasKey(LabelTag)) {
+        label = Option(nbt.getString(LabelTag))
       }
     }
 
     override def save(nbt: NBTTagCompound) {
       label match {
-        case Some(value) => nbt.setString(Settings.namespace + "fs.label", value)
+        case Some(value) => nbt.setString(LabelTag, value)
         case _ =>
       }
     }

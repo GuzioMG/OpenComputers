@@ -8,6 +8,7 @@ import li.cil.oc.server.component.result
 import li.cil.oc.util.BlockPosition
 import li.cil.oc.util.ExtendedArguments._
 import li.cil.oc.util.InventoryUtils
+import net.minecraft.item.ItemStack
 import net.minecraft.util.EnumFacing
 import net.minecraftforge.items.IItemHandler
 
@@ -18,16 +19,16 @@ trait InventoryWorldControlMk2 extends InventoryAware with WorldAware with SideR
     val count = args.optItemCount(2)
     val fromSide = args.optSideAny(3, facing.getOpposite)
     val stack = inventory.getStackInSlot(selectedSlot)
-    if (stack != null && stack.stackSize > 0) {
+    if (!stack.isEmpty && stack.getCount > 0) {
       withInventory(position.offset(facing), fromSide, inventory => {
         val slot = args.checkSlot(inventory, 1)
         if (!InventoryUtils.insertIntoInventorySlot(stack, inventory, slot, count)) {
           // Cannot drop into that inventory.
           return result(false, "inventory full/invalid slot")
         }
-        else if (stack.stackSize == 0) {
+        else if (stack.getCount == 0) {
           // Dropped whole stack.
-          this.inventory.setInventorySlotContents(selectedSlot, null)
+          this.inventory.setInventorySlotContents(selectedSlot, ItemStack.EMPTY)
         }
         else {
           // Dropped partial stack.
@@ -49,9 +50,10 @@ trait InventoryWorldControlMk2 extends InventoryAware with WorldAware with SideR
     val fromSide = args.optSideAny(3, facing.getOpposite)
     withInventory(position.offset(facing), fromSide, inventory => {
       val slot = args.checkSlot(inventory, 1)
-      if (InventoryUtils.extractFromInventorySlot(InventoryUtils.insertIntoInventory(_, InventoryUtils.asItemHandler(this.inventory), slots = Option(insertionSlots)), inventory, slot, count)) {
+      val extracted = InventoryUtils.extractFromInventorySlot(InventoryUtils.insertIntoInventory(_, InventoryUtils.asItemHandler(this.inventory), slots = Option(insertionSlots)), inventory, slot, count)
+      if (extracted > 0) {
         context.pause(Settings.get.suckDelay)
-        result(true)
+        result(extracted)
       }
       else result(false)
     })

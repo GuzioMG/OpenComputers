@@ -35,7 +35,7 @@ This mod is [licensed under the **MIT license**](https://github.com/MightyPirate
 2. **Features**  
    If you'd like to propose a new feature, take it to the [forums][] or the [issue tracker][issues]. If you'd like to contribute code that adds new features, please make sure to discuss the feature with me, first - again, the issue tracker is an OK place for this, there are a couple of feature requests there, already. Alternatively start a topic on the forums to discuss the feature, and / or stop by the [IRC][irc] to talk about it. Blind / unexpected feature pull requests might very well not make it, so save yourself some time by talking about it, first! Thanks.
 3. **Scripts / Programs**  
-   OpenComputers generates floppy disks in dungeon chests that can contain data from a selection of 'loot' directories. For example, the IRC client and the Better Shell (besh) are two programs that can be found on such loot disks. If you'd like to contribute a program that can be found this way, please have a look at [the loot readme][loot], which explains how to add custom loot. Simply pull request your loot!
+   OpenComputers generates floppy disks in dungeon chests that can contain data from a selection of 'loot' directories. For example, the IRC client and OPPM (a package manager) are two programs that can be found on such loot disks. If you'd like to contribute a program that can be found this way, please have a look at [the loot readme][loot], which explains how to add custom loot. Simply pull request your loot!
 4. **Core Scripts**  
    If you would like to contribute scripts to the "core" Lua code (which basically defines 'OpenOS'), please have a look at the [code conventions][] for Lua to save us all some time. Bug fixes are always welcome. Additional programs and features should be kept small. Bigger programs (rule of thumb: larger than 3KiB) should go onto loot disks.
 5. **Drivers**  
@@ -86,14 +86,16 @@ to create an IntelliJ IDEA project.
 
 Open the project and you will be asked to *import the Gradle project* (check your Event Log if you missed the pop-up). **Do so**. This will configure additionally referenced libraries.
 
+For more specific instructions, read [Steps to run master MC1.7.10 from IDEA][idea_1.7.10]
+
 In the case you wish to use Eclipse rather than IntelliJ IDEA, the process is mostly the same, except you must run `gradlew eclipse` rather than `gradlew idea`.
 
 
 
 [api]: https://github.com/MightyPirates/OpenComputers/tree/master-MC1.7.10/src/main/java/li/cil/oc/api
-[code conventions]: http://ocdoc.cil.li/lua_conventions
-[dev-jar]: http://oc.cil.li/index.php?/page/latest.php?repo=OpenComputers-dev-MC1.7.10&type=dev
-[forums]: http://oc.cil.li/
+[code conventions]: https://ocdoc.cil.li/lua_conventions
+[dev-jar]: https://ci.cil.li/view/OpenComputers/job/OpenComputers-MC1.7.10/
+[forums]: https://oc.cil.li/
 [irc]: http://webchat.esper.net/?channels=#oc
 [issues]: https://github.com/MightyPirates/OpenComputers/issues?state=open
 [jenkins]: http://ci.cil.li/
@@ -105,6 +107,7 @@ In the case you wish to use Eclipse rather than IntelliJ IDEA, the process is mo
 [pack.mcmeta]: https://github.com/MightyPirates/OpenComputers/blob/master-MC1.7.10/src/main/resources/pack.mcmeta
 [releases]: https://github.com/MightyPirates/OpenComputers/releases
 [robot names]: https://github.com/MightyPirates/OpenComputers/blob/master-MC1.7.10/src/main/resources/assets/opencomputers/robot.names
-[wiki]: http://ocdoc.cil.li/
+[wiki]: https://ocdoc.cil.li/
 [integration]: https://github.com/MightyPirates/OpenComputers/tree/master-MC1.7.10/src/main/scala/li/cil/oc/integration
 [ingame manual]: https://github.com/MightyPirates/OpenComputers/tree/master-MC1.7.10/src/main/resources/assets/opencomputers/doc
+[idea_1.7.10]: https://ocdoc.cil.li/tutorial:debug_1.7.10

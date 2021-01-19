@@ -22,8 +22,8 @@ class Keyboard extends traits.Environment with traits.Rotatable with traits.Immi
 
   override def node = keyboard.node
 
-  def hasNodeOnSide(side: EnumFacing) =
-    side == facing.getOpposite || side == forward || (isOnWall && side == forward.getOpposite)
+  def hasNodeOnSide(side: EnumFacing) : Boolean =
+    side != facing && (isOnWall || side.getOpposite != forward)
 
   // ----------------------------------------------------------------------- //
 
@@ -37,17 +37,21 @@ class Keyboard extends traits.Environment with traits.Rotatable with traits.Immi
 
   // ----------------------------------------------------------------------- //
 
+  // ----------------------------------------------------------------------- //
+
+  private final val KeyboardTag = Settings.namespace + "keyboard"
+
   override def readFromNBTForServer(nbt: NBTTagCompound) {
     super.readFromNBTForServer(nbt)
     if (isServer) {
-      keyboard.load(nbt.getCompoundTag(Settings.namespace + "keyboard"))
+      keyboard.load(nbt.getCompoundTag(KeyboardTag))
     }
   }
 
   override def writeToNBTForServer(nbt: NBTTagCompound) {
     super.writeToNBTForServer(nbt)
     if (isServer) {
-      nbt.setNewCompoundTag(Settings.namespace + "keyboard", keyboard.save)
+      nbt.setNewCompoundTag(KeyboardTag, keyboard.save)
     }
   }
 

@@ -11,7 +11,7 @@ import scala.collection.convert.WrapAsScala._
 object Tooltip {
   private val maxWidth = 220
 
-  private def font = Minecraft.getMinecraft.fontRendererObj
+  private def font = Minecraft.getMinecraft.fontRenderer
 
   def get(name: String, args: Any*): java.util.List[String] = {
     if (!Localization.canLocalize(Settings.namespace + "tooltip." + name)) return Seq.empty[String]
@@ -22,7 +22,7 @@ object Tooltip {
     val shouldShorten = (isSubTooltip || font.getStringWidth(tooltip) > maxWidth) && !KeyBindings.showExtendedTooltips
     if (shouldShorten) {
       if (isSubTooltip) Seq.empty[String]
-      else Seq(Localization.localizeImmediately("tooltip.TooLong", KeyBindings.getKeyBindingName(KeyBindings.extendedTooltip)))
+      else Seq(Localization.localizeImmediately("tooltip.toolong", KeyBindings.getKeyBindingName(KeyBindings.extendedTooltip)))
     }
     else tooltip.
       lines.

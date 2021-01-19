@@ -12,14 +12,15 @@ import li.cil.oc.common.block.SimpleBlock
 import li.cil.oc.common.tileentity
 import li.cil.oc.common.tileentity.traits.NotAnalyzable
 import li.cil.oc.util.ExtendedNBT._
+import li.cil.oc.util.StackOption.SomeStack
 import mcp.mobius.waila.api._
 import net.minecraft.entity.player.EntityPlayerMP
 import net.minecraft.item.ItemStack
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.nbt.NBTTagString
 import net.minecraft.tileentity.TileEntity
-import net.minecraft.util.BlockPos
 import net.minecraft.util.EnumFacing
+import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 import net.minecraftforge.common.util.Constants.NBT
 
@@ -78,16 +79,19 @@ object BlockDataProvider extends IWailaDataProvider {
     }
 
     tileEntity match {
-      case te: tileentity.AccessPoint =>
+      case te: tileentity.Relay =>
         tag.setDouble("signalStrength", te.strength)
-        tag.setNewTagList("addresses", stringIterableToNbt(te.componentNodes.map(_.address)))
+        // this might be called by waila before the components have finished loading, thus the addresses may be null
+        tag.setNewTagList("addresses", stringIterableToNbt(te.componentNodes.collect {
+          case n if n.address != null => n
+        }.map(_.address)))
       case te: tileentity.Assembler =>
         ignoreSidedness(te.node)
         if (te.isAssembling) {
           tag.setDouble("progress", te.progress)
           tag.setInteger("timeRemaining", te.timeRemaining)
           te.output match {
-            case Some(output) => tag.setString("output", output.getUnlocalizedName)
+            case SomeStack(output) => tag.setString("output", output.getUnlocalizedName)
             case _ => // Huh...
           }
         }
@@ -116,7 +120,7 @@ object BlockDataProvider extends IWailaDataProvider {
     if (tag == null || tag.hasNoTags) return tooltip
 
     accessor.getTileEntity match {
-      case _: tileentity.AccessPoint =>
+      case _: tileentity.Relay =>
         val address = tag.getTagList("addresses", NBT.TAG_STRING).getStringTagAt(accessor.getSide.ordinal)
         val signalStrength = tag.getDouble("signalStrength")
         if (config.getConfig(ConfigAddress)) {

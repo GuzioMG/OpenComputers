@@ -37,7 +37,6 @@ import li.cil.oc.integration.ModProxy
 import li.cil.oc.integration.Mods
 import li.cil.oc.integration.util.BundledRedstone
 import li.cil.oc.integration.util.ItemBlacklist
-import li.cil.oc.integration.util.WirelessRedstone
 import li.cil.oc.server.machine.luac.LuaStateFactory
 import li.cil.oc.server.machine.luac.NativeLua53Architecture
 import li.cil.oc.server.network.Waypoints
@@ -45,7 +44,7 @@ import li.cil.oc.server.network.WirelessNetwork
 import li.cil.oc.util.Color
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.item.ItemStack
-import net.minecraft.util.BlockPos
+import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 import net.minecraftforge.common.ForgeChunkManager
 import net.minecraftforge.common.MinecraftForge
@@ -120,6 +119,7 @@ object ModOpenComputers extends ModProxy {
     MinecraftForge.EVENT_BUS.register(li.cil.oc.server.ComponentTracker)
 
     api.Driver.add(ConverterNanomachines)
+    api.Driver.add(ConverterLinkedCard)
 
     api.Driver.add(DriverAPU)
     api.Driver.add(DriverComponentBus)
@@ -153,6 +153,7 @@ object ModOpenComputers extends ModProxy {
     api.Driver.add(DriverTerminalServer)
 
     api.Driver.add(DriverUpgradeAngel)
+    api.Driver.add(DriverUpgradeBarcodeReader)
     api.Driver.add(DriverUpgradeBattery)
     api.Driver.add(DriverUpgradeChunkloader)
     api.Driver.add(DriverUpgradeCrafting)
@@ -167,6 +168,7 @@ object ModOpenComputers extends ModProxy {
     api.Driver.add(DriverUpgradePiston)
     api.Driver.add(DriverUpgradeSign)
     api.Driver.add(DriverUpgradeSolarGenerator)
+    api.Driver.add(DriverUpgradeStickyPiston)
     api.Driver.add(DriverUpgradeTank)
     api.Driver.add(DriverUpgradeTankController)
     api.Driver.add(DriverUpgradeTractorBeam)
@@ -198,6 +200,7 @@ object ModOpenComputers extends ModProxy {
     api.Driver.add(DriverUpgradeNavigation.Provider)
     api.Driver.add(DriverUpgradePiston.Provider)
     api.Driver.add(DriverUpgradeSign.Provider)
+    api.Driver.add(DriverUpgradeStickyPiston.Provider)
     api.Driver.add(DriverUpgradeTankController.Provider)
     api.Driver.add(DriverUpgradeTractorBeam.Provider)
     api.Driver.add(DriverUpgradeMF.Provider)
@@ -213,6 +216,8 @@ object ModOpenComputers extends ModProxy {
       Constants.BlockName.Keyboard,
       Constants.BlockName.ScreenTier1,
       Constants.BlockName.Transposer,
+      Constants.BlockName.CarpetedCapacitor,
+      Constants.ItemName.Analyzer,
       Constants.ItemName.AngelUpgrade,
       Constants.ItemName.BatteryUpgradeTier1,
       Constants.ItemName.BatteryUpgradeTier2,
@@ -226,6 +231,7 @@ object ModOpenComputers extends ModProxy {
       Constants.ItemName.InventoryUpgrade,
       Constants.ItemName.NavigationUpgrade,
       Constants.ItemName.PistonUpgrade,
+      Constants.ItemName.StickyPistonUpgrade,
       Constants.ItemName.SolarGeneratorUpgrade,
       Constants.ItemName.TankUpgrade,
       Constants.ItemName.TractorBeamUpgrade,
@@ -235,6 +241,8 @@ object ModOpenComputers extends ModProxy {
       Constants.BlockName.Keyboard,
       Constants.BlockName.ScreenTier1,
       Constants.BlockName.Transposer,
+      Constants.BlockName.CarpetedCapacitor,
+      Constants.ItemName.Analyzer,
       Constants.ItemName.APUTier1,
       Constants.ItemName.APUTier2,
       Constants.ItemName.GraphicsCardTier1,
@@ -242,20 +250,20 @@ object ModOpenComputers extends ModProxy {
       Constants.ItemName.GraphicsCardTier3,
       Constants.ItemName.NetworkCard,
       Constants.ItemName.RedstoneCardTier1,
-      Constants.ItemName.AngelUpgrade,
       Constants.ItemName.CraftingUpgrade,
       Constants.ItemName.HoverUpgradeTier1,
       Constants.ItemName.HoverUpgradeTier2)
     blacklistHost(classOf[internal.Microcontroller],
       Constants.BlockName.Keyboard,
       Constants.BlockName.ScreenTier1,
+      Constants.BlockName.CarpetedCapacitor,
+      Constants.ItemName.Analyzer,
       Constants.ItemName.APUTier1,
       Constants.ItemName.APUTier2,
       Constants.ItemName.GraphicsCardTier1,
       Constants.ItemName.GraphicsCardTier2,
       Constants.ItemName.GraphicsCardTier3,
       Constants.ItemName.AngelUpgrade,
-      Constants.ItemName.ChunkloaderUpgrade,
       Constants.ItemName.CraftingUpgrade,
       Constants.ItemName.DatabaseUpgradeTier1,
       Constants.ItemName.DatabaseUpgradeTier2,
@@ -274,10 +282,13 @@ object ModOpenComputers extends ModProxy {
       Constants.ItemName.TradingUpgrade)
     blacklistHost(classOf[internal.Robot],
       Constants.BlockName.Transposer,
+      Constants.BlockName.CarpetedCapacitor,
+      Constants.ItemName.Analyzer,
       Constants.ItemName.LeashUpgrade)
     blacklistHost(classOf[internal.Tablet],
       Constants.BlockName.ScreenTier1,
       Constants.BlockName.Transposer,
+      Constants.BlockName.CarpetedCapacitor,
       Constants.ItemName.NetworkCard,
       Constants.ItemName.RedstoneCardTier1,
       Constants.ItemName.AngelUpgrade,
@@ -297,24 +308,15 @@ object ModOpenComputers extends ModProxy {
       Constants.ItemName.LeashUpgrade,
       Constants.ItemName.TradingUpgrade)
 
-    if (!WirelessRedstone.isAvailable) {
-      blacklistHost(classOf[internal.Drone], Constants.ItemName.RedstoneCardTier2)
-      blacklistHost(classOf[internal.Tablet], Constants.ItemName.RedstoneCardTier2)
-    }
-
     // Note: kinda nasty, but we have to check for availability for extended
     // redstone mods after integration init, so we have to set tier two
     // redstone card availability here, after all other mods were inited.
-    if (BundledRedstone.isAvailable || WirelessRedstone.isAvailable) {
+    if (BundledRedstone.isAvailable) {
       OpenComputers.log.info("Found extended redstone mods, enabling tier two redstone card.")
       Delegator.subItem(api.Items.get(Constants.ItemName.RedstoneCardTier2).createItemStack(1)) match {
         case Some(redstone: RedstoneCard) => redstone.showInItemList = true
         case _ =>
       }
-    }
-
-    if (Settings.get.enableLua53 && LuaStateFactory.Lua53.isAvailable) {
-      api.Machine.add(classOf[NativeLua53Architecture])
     }
 
     api.Manual.addProvider(DefinitionPathProvider)
@@ -336,7 +338,7 @@ object ModOpenComputers extends ModProxy {
   }
 
   def useWrench(player: EntityPlayer, pos: BlockPos, changeDurability: Boolean): Boolean = {
-    player.getHeldItem.getItem match {
+    player.getHeldItemMainhand.getItem match {
       case wrench: Wrench => wrench.useWrenchOnBlock(player, player.getEntityWorld, pos, !changeDurability)
       case _ => false
     }
@@ -352,7 +354,7 @@ object ModOpenComputers extends ModProxy {
   def charge(stack: ItemStack, amount: Double, simulate: Boolean): Double = {
     stack.getItem match {
       case chargeable: Chargeable => chargeable.charge(stack, amount, simulate)
-      case _ => 0.0
+      case _ => amount
     }
   }
 
@@ -382,8 +384,7 @@ object ModOpenComputers extends ModProxy {
     private final val Blacklist = Set(
       Constants.ItemName.Debugger,
       Constants.ItemName.DiamondChip,
-      Constants.BlockName.Endstone,
-      Constants.ItemName.IronNugget
+      Constants.BlockName.Endstone
     )
 
     override def pathFor(stack: ItemStack): String = Option(api.Items.get(stack)) match {

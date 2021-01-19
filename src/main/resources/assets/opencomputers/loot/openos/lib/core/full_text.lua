@@ -1,6 +1,8 @@
 local text = require("text")
 local tx = require("transforms")
 local unicode = require("unicode")
+local process = require("process")
+local buffer = require("buffer")
 
 -- separate string value into an array of words delimited by whitespace
 -- groups by quotes
@@ -91,7 +93,7 @@ function text.internal.splitWords(words, delimiters)
         add_part(part)
       else
         local part_text_splits = text.split(part.txt, delimiters)
-        tx.foreach(part_text_splits, function(sub_txt, spi)
+        tx.foreach(part_text_splits, function(sub_txt)
           local delim = #text.split(sub_txt, delimiters, true) == 0
           next_word = next_word or delim
           add_part({txt=sub_txt,qr=qr})
@@ -177,9 +179,8 @@ function text.internal.reader(txt, mode)
       _.txt = nil
       return true
     end,
-  }, {__index=text.internal.stream_base(mode:match("b"))})
-
-  return require("buffer").new("r", reader)
+  }, {__index=text.internal.stream_base((mode or ""):match("b"))})
+  return process.addHandle(buffer.new((mode or "r"):match("[rb]+"), reader))
 end
 
 function text.internal.writer(ostream, mode, append_txt)
@@ -201,7 +202,7 @@ function text.internal.writer(ostream, mode, append_txt)
       local pre = _.psub(_.txt, 1, _.index)
       local vs = {}
       local pos = _.psub(_.txt, _.index + 1)
-      for i,v in ipairs({...}) do
+      for _,v in ipairs({...}) do
         table.insert(vs, v)
       end
       vs = table.concat(vs)
@@ -218,9 +219,8 @@ function text.internal.writer(ostream, mode, append_txt)
       _.txt = nil
       return true
     end,
-  }, {__index=text.internal.stream_base(mode:match("b"))})
-
-  return require("buffer").new("w", writer)
+  }, {__index=text.internal.stream_base((mode or ""):match("b"))})
+  return process.addHandle(buffer.new((mode or "w"):match("[awb]+"), writer))
 end
 
 function text.detab(value, tabWidth)
@@ -244,3 +244,43 @@ function text.padLeft(value, length)
     return string.rep(" ", length - unicode.wlen(value)) .. value
   end
 end
+
+function text.padRight(value, length)
+  checkArg(1, value, "string", "nil")
+  checkArg(2, length, "number")
+  if not value or unicode.wlen(value) == 0 then
+    return string.rep(" ", length)
+  else
+    return value .. string.rep(" ", length - unicode.wlen(value))
+  end
+end
+
+function text.wrap(value, width, maxWidth)
+  checkArg(1, value, "string")
+  checkArg(2, width, "number")
+  checkArg(3, maxWidth, "number")
+  local line, nl = value:match("([^\r\n]*)(\r?\n?)") -- read until newline
+  if unicode.wlen(line) > width then -- do we even need to wrap?
+    local partial = unicode.wtrunc(line, width)
+    local wrapped = partial:match("(.*[^a-zA-Z0-9._()'`=])")
+    if wrapped or unicode.wlen(line) > maxWidth then
+      partial = wrapped or partial
+      return partial, unicode.sub(value, unicode.len(partial) + 1), true
+    else
+      return "", value, true -- write in new line.
+    end
+  end
+  local start = unicode.len(line) + unicode.len(nl) + 1
+  return line, start <= unicode.len(value) and unicode.sub(value, start) or nil, unicode.len(nl) > 0
+end
+
+function text.wrappedLines(value, width, maxWidth)
+  local line
+  return function()
+    if value then
+      line, value = text.wrap(value, width, maxWidth)
+      return line
+    end
+  end
+end
+

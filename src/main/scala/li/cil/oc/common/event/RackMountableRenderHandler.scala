@@ -36,8 +36,8 @@ object RackMountableRenderHandler {
       // Disk drive.
 
       if (e.data.hasKey("disk")) {
-        val stack = ItemStack.loadItemStackFromNBT(e.data.getCompoundTag("disk"))
-        if (stack != null) {
+        val stack = new ItemStack(e.data.getCompoundTag("disk"))
+        if (!stack.isEmpty) {
           GlStateManager.pushMatrix()
           GlStateManager.scale(1, -1, 1)
           GlStateManager.translate(10 / 16f, -(3.5f + e.mountable * 3f) / 16f, -2 / 16f)
@@ -50,7 +50,7 @@ object RackMountableRenderHandler {
           // This is very 'meh', but item frames do it like this, too!
           val entity = new EntityItem(e.rack.world, 0, 0, 0, stack)
           entity.hoverStart = 0
-          Minecraft.getMinecraft.getRenderItem.renderItem(entity.getEntityItem, ItemCameraTransforms.TransformType.FIXED)
+          Minecraft.getMinecraft.getRenderItem.renderItem(entity.getItem, ItemCameraTransforms.TransformType.FIXED)
           GlStateManager.popMatrix()
         }
       }

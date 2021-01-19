@@ -1,7 +1,7 @@
 package li.cil.oc.util;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.util.MathHelper;
+import net.minecraft.util.math.MathHelper;
 
 public class OldScaledResolution {
     private final int scaledWidth;
@@ -23,8 +23,8 @@ public class OldScaledResolution {
             --scaleFactor;
         }
 
-        this.scaledWidth = MathHelper.ceiling_double_int((double) width / (double) scaleFactor);
-        this.scaledHeight = MathHelper.ceiling_double_int((double) height / (double) scaleFactor);
+        this.scaledWidth = MathHelper.ceil((double) width / (double) scaleFactor);
+        this.scaledHeight = MathHelper.ceil((double) height / (double) scaleFactor);
     }
 
     public int getScaledWidth() {

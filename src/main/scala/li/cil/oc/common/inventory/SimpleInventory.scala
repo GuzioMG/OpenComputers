@@ -4,11 +4,12 @@ import li.cil.oc.Localization
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.inventory.IInventory
 import net.minecraft.item.ItemStack
+import net.minecraft.util.text.ITextComponent
 
 trait SimpleInventory extends IInventory {
   override def hasCustomName = false
 
-  override def getDisplayName = Localization.localizeLater(getName)
+  override def getDisplayName: ITextComponent = Localization.localizeLater(getName)
 
   override def getInventoryStackLimit = 64
 
@@ -22,34 +23,34 @@ trait SimpleInventory extends IInventory {
   override def decrStackSize(slot: Int, amount: Int): ItemStack = {
     if (slot >= 0 && slot < getSizeInventory) {
       (getStackInSlot(slot) match {
-        case stack: ItemStack if stack.stackSize - amount < getInventoryStackRequired =>
-          setInventorySlotContents(slot, null)
+        case stack: ItemStack if stack.getCount - amount < getInventoryStackRequired =>
+          setInventorySlotContents(slot, ItemStack.EMPTY)
           stack
         case stack: ItemStack =>
           val result = stack.splitStack(amount)
           markDirty()
           result
-        case _ => null
+        case _ => ItemStack.EMPTY
       }) match {
-        case stack: ItemStack if stack.stackSize > 0 => stack
-        case _ => null
+        case stack: ItemStack if stack.getCount > 0 => stack
+        case _ => ItemStack.EMPTY
       }
     }
-    else null
+    else ItemStack.EMPTY
   }
 
   override def removeStackFromSlot(slot: Int) = {
     if (slot >= 0 && slot < getSizeInventory) {
       val stack = getStackInSlot(slot)
-      setInventorySlotContents(slot, null)
+      setInventorySlotContents(slot, ItemStack.EMPTY)
       stack
     }
-    else null
+    else ItemStack.EMPTY
   }
 
   override def clear(): Unit = {
     for (slot <- 0 until getSizeInventory) {
-      setInventorySlotContents(slot, null)
+      setInventorySlotContents(slot, ItemStack.EMPTY)
     }
   }
 

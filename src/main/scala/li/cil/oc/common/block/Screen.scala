@@ -2,6 +2,16 @@ package li.cil.oc.common.block
 
 import java.util
 
+import _root_.net.minecraft.entity.Entity
+import _root_.net.minecraft.entity.EntityLivingBase
+import _root_.net.minecraft.entity.player.EntityPlayer
+import _root_.net.minecraft.entity.projectile.EntityArrow
+import _root_.net.minecraft.item.ItemStack
+import _root_.net.minecraft.util.EnumFacing
+import _root_.net.minecraft.util.EnumHand
+import _root_.net.minecraft.world.{IBlockAccess, World}
+import _root_.net.minecraftforge.common.property.ExtendedBlockState
+import _root_.net.minecraftforge.common.property.IExtendedBlockState
 import li.cil.oc.Constants
 import li.cil.oc.OpenComputers
 import li.cil.oc.Settings
@@ -10,33 +20,18 @@ import li.cil.oc.common.GuiType
 import li.cil.oc.common.block.property.PropertyRotatable
 import li.cil.oc.common.block.property.PropertyTile
 import li.cil.oc.common.tileentity
-import li.cil.oc.integration.coloredlights.ModColoredLights
 import li.cil.oc.integration.util.Wrench
-import li.cil.oc.util.Color
 import li.cil.oc.util.PackedColor
 import li.cil.oc.util.Rarity
 import li.cil.oc.util.Tooltip
-import net.minecraft.block.state.BlockState
 import net.minecraft.block.state.IBlockState
 import net.minecraft.client.Minecraft
-import net.minecraft.entity.Entity
-import net.minecraft.entity.EntityLivingBase
-import net.minecraft.entity.player.EntityPlayer
-import net.minecraft.entity.projectile.EntityArrow
-import net.minecraft.item.ItemStack
-import net.minecraft.util.BlockPos
-import net.minecraft.util.EnumFacing
-import net.minecraft.world.IBlockAccess
-import net.minecraft.world.World
-import net.minecraftforge.common.property.ExtendedBlockState
-import net.minecraftforge.common.property.IExtendedBlockState
-import net.minecraftforge.fml.relauncher.Side
-import net.minecraftforge.fml.relauncher.SideOnly
+import net.minecraft.client.util.ITooltipFlag
+import net.minecraft.util.math.{AxisAlignedBB, BlockPos}
+import net.minecraftforge.fml.relauncher.{Side, SideOnly}
 
 class Screen(val tier: Int) extends RedstoneAware {
-  ModColoredLights.setLightLevel(this, 5, 5, 5)
-
-  override def createBlockState(): BlockState = new ExtendedBlockState(this, Array(PropertyRotatable.Pitch, PropertyRotatable.Yaw), Array(PropertyTile.Tile))
+  override def createBlockState() = new ExtendedBlockState(this, Array(PropertyRotatable.Pitch, PropertyRotatable.Yaw), Array(PropertyTile.Tile))
 
   override def getMetaFromState(state: IBlockState): Int = (state.getValue(PropertyRotatable.Pitch).ordinal() << 2) | state.getValue(PropertyRotatable.Yaw).getHorizontalIndex
 
@@ -52,21 +47,16 @@ class Screen(val tier: Int) extends RedstoneAware {
       case _ => state
     }
 
-  override def isSideSolid(world: IBlockAccess, pos: BlockPos, side: EnumFacing) = toLocal(world, pos, side) != EnumFacing.SOUTH
-
-  // ----------------------------------------------------------------------- //
-
-  @SideOnly(Side.CLIENT)
-  override def getRenderColor(state: IBlockState) = Color.rgbValues(Color.byTier(tier))
+  override def isSideSolid(state: IBlockState, world: IBlockAccess, pos: BlockPos, side: EnumFacing) = toLocal(world, pos, side) != EnumFacing.SOUTH
 
   // ----------------------------------------------------------------------- //
 
   override def rarity(stack: ItemStack) = Rarity.byTier(tier)
 
-  override protected def tooltipBody(metadata: Int, stack: ItemStack, player: EntityPlayer, tooltip: util.List[String], advanced: Boolean) {
+  override protected def tooltipBody(metadata: Int, stack: ItemStack, world: World, tooltip: util.List[String], advanced: ITooltipFlag) {
     val (w, h) = Settings.screenResolutionsByTier(tier)
     val depth = PackedColor.Depth.bits(Settings.screenDepthsByTier(tier))
-    tooltip.addAll(Tooltip.get(getClass.getSimpleName, w, h, depth))
+    tooltip.addAll(Tooltip.get(getClass.getSimpleName.toLowerCase, w, h, depth))
   }
 
   // ----------------------------------------------------------------------- //
@@ -83,12 +73,12 @@ class Screen(val tier: Int) extends RedstoneAware {
     }
   }
 
-  override def localOnBlockActivated(world: World, pos: BlockPos, player: EntityPlayer, side: EnumFacing, hitX: Float, hitY: Float, hitZ: Float) = rightClick(world, pos, player, side, hitX, hitY, hitZ, force = false)
+  override def localOnBlockActivated(world: World, pos: BlockPos, player: EntityPlayer, hand: EnumHand, heldItem: ItemStack, side: EnumFacing, hitX: Float, hitY: Float, hitZ: Float) = rightClick(world, pos, player, hand, heldItem, side, hitX, hitY, hitZ, force = false)
 
-  def rightClick(world: World, pos: BlockPos, player: EntityPlayer,
+  def rightClick(world: World, pos: BlockPos, player: EntityPlayer, hand: EnumHand, heldItem: ItemStack,
                  side: EnumFacing, hitX: Float, hitY: Float, hitZ: Float, force: Boolean) = {
     if (Wrench.holdsApplicableWrench(player, pos) && getValidRotations(world, pos).contains(side) && !force) false
-    else if (api.Items.get(player.getHeldItem) == api.Items.get(Constants.ItemName.Analyzer)) false
+    else if (api.Items.get(heldItem) == api.Items.get(Constants.ItemName.Analyzer)) false
     else world.getTileEntity(pos) match {
       case screen: tileentity.Screen if screen.hasKeyboard && (force || player.isSneaking == screen.origin.invertTouchMode) =>
         // Yep, this GUI is actually purely client side. We could skip this
@@ -99,7 +89,7 @@ class Screen(val tier: Int) extends RedstoneAware {
         }
         true
       case screen: tileentity.Screen if screen.tier > 0 && side == screen.facing =>
-        if (world.isRemote && player == Minecraft.getMinecraft.thePlayer) {
+        if (world.isRemote && player == Minecraft.getMinecraft.player) {
           screen.click(hitX, hitY, hitZ)
         }
         else true
@@ -107,7 +97,13 @@ class Screen(val tier: Int) extends RedstoneAware {
     }
   }
 
-  override def onEntityCollidedWithBlock(world: World, pos: BlockPos, entity: Entity) =
+  override def onEntityWalk(world: World, pos: BlockPos, entity: Entity): Unit =
+    if (!world.isRemote) world.getTileEntity(pos) match {
+      case screen: tileentity.Screen if screen.tier > 0 && screen.facing == EnumFacing.UP => screen.walk(entity)
+      case _ => super.onEntityWalk(world, pos, entity)
+    }
+
+  override def onEntityCollidedWithBlock(world: World, pos: BlockPos, state: IBlockState, entity: Entity): Unit =
     if (world.isRemote) (entity, world.getTileEntity(pos)) match {
       case (arrow: EntityArrow, screen: tileentity.Screen) if screen.tier > 0 =>
         val hitX = math.max(0, math.min(1, arrow.posX - pos.getX))
@@ -133,10 +129,6 @@ class Screen(val tier: Int) extends RedstoneAware {
         }
       case _ =>
     }
-    else world.getTileEntity(pos) match {
-      case screen: tileentity.Screen if screen.tier > 0 && screen.facing == EnumFacing.UP => screen.walk(entity)
-      case _ =>
-    }
 
   // ----------------------------------------------------------------------- //
 
@@ -149,4 +141,13 @@ class Screen(val tier: Int) extends RedstoneAware {
         }
       case _ => super.getValidRotations(world, pos)
     }
+
+  val emptyBB = new AxisAlignedBB(0, 0, 0, 0, 0, 0)
+
+  @SideOnly(Side.CLIENT)
+  override def getSelectedBoundingBox(state: IBlockState, worldIn: World, pos: BlockPos): AxisAlignedBB =
+    if (!Minecraft.getMinecraft.player.isSneaking)
+      emptyBB
+    else
+      super.getSelectedBoundingBox(state, worldIn, pos)
 }

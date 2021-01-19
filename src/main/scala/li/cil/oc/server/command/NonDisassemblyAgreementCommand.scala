@@ -7,18 +7,19 @@ import net.minecraft.command.ICommandSender
 import net.minecraft.command.WrongUsageException
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.nbt.NBTTagCompound
+import net.minecraft.server.MinecraftServer
 
 object NonDisassemblyAgreementCommand extends SimpleCommand("oc_preventDisassembling") {
   aliases += "oc_nodis"
   aliases += "oc_prevdis"
 
-  override def getCommandUsage(source: ICommandSender) = name + " <boolean>"
+  override def getUsage(source: ICommandSender) = name + " <boolean>"
 
-  override def processCommand(source: ICommandSender, command: Array[String]) {
+  override def execute(server: MinecraftServer, source: ICommandSender, command: Array[String]): Unit = {
     source match {
       case player: EntityPlayer =>
-        val stack = player.getHeldItem
-        if (stack != null) {
+        val stack = player.getHeldItemMainhand
+        if (!stack.isEmpty) {
           if (!stack.hasTagCompound) {
             stack.setTagCompound(new NBTTagCompound())
           }

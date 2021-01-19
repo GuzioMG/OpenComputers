@@ -1,5 +1,7 @@
 package li.cil.oc.integration.appeng
 
+import appeng.api.implementations.tiles.ISegmentedInventory
+import appeng.api.parts.IPartHost
 import li.cil.oc.api.internal.Database
 import li.cil.oc.api.machine.Arguments
 import li.cil.oc.api.machine.Context
@@ -7,6 +9,7 @@ import li.cil.oc.api.network.Component
 import li.cil.oc.api.network.ManagedEnvironment
 import li.cil.oc.util.ExtendedArguments._
 import li.cil.oc.util.ResultWrapper.result
+import net.minecraft.item.ItemStack
 
 import scala.reflect.ClassTag
 
@@ -42,9 +45,9 @@ trait PartEnvironmentBase extends ManagedEnvironment {
             case component: Component => component.host match {
               case database: Database =>
                 val dbStack = database.getStackInSlot(entry - 1)
-                if (dbStack == null || size < 1) null
+                if (dbStack == null || size < 1 || dbStack.isEmpty) ItemStack.EMPTY
                 else {
-                  dbStack.stackSize = math.min(size, dbStack.getMaxStackSize)
+                  dbStack.setCount(math.min(size, dbStack.getMaxStackSize))
                   dbStack
                 }
               case _ => throw new IllegalArgumentException("not a database")
@@ -52,8 +55,9 @@ trait PartEnvironmentBase extends ManagedEnvironment {
             case _ => throw new IllegalArgumentException("no such component")
           }
         }
-        else null
-        config.setInventorySlotContents(slot, stack)
+        else ItemStack.EMPTY
+        config.extractItem(slot, config.getStackInSlot(slot).getCount, false)
+        config.insertItem(slot, stack, false)
         context.pause(0.5)
         result(true)
       case _ => result(Unit, "no matching part")

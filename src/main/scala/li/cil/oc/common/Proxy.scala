@@ -15,15 +15,19 @@ import li.cil.oc.integration.Mods
 import li.cil.oc.server._
 import li.cil.oc.server.machine.luac.LuaStateFactory
 import li.cil.oc.server.machine.luac.NativeLua52Architecture
+import li.cil.oc.server.machine.luac.NativeLua53Architecture
 import li.cil.oc.server.machine.luaj.LuaJLuaArchitecture
 import net.minecraft.block.Block
 import net.minecraft.item.Item
 import net.minecraft.item.ItemStack
+import net.minecraft.util.ResourceLocation
+import net.minecraftforge.common.MinecraftForge
+import net.minecraftforge.event.RegistryEvent.MissingMappings
 import net.minecraftforge.fml.common.FMLLog
 import net.minecraftforge.fml.common.event._
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent
 import net.minecraftforge.fml.common.network.NetworkRegistry
-import net.minecraftforge.fml.common.registry.EntityRegistry
-import net.minecraftforge.fml.common.registry.GameRegistry
+import net.minecraftforge.fml.common.registry.{EntityRegistry}
 import net.minecraftforge.oredict.OreDictionary
 
 import scala.collection.convert.WrapAsScala._
@@ -35,27 +39,31 @@ class Proxy {
 
     Settings.load(new File(e.getModConfigurationDirectory, "opencomputers" + File.separator + "settings.conf"))
 
-    OpenComputers.log.info("Initializing blocks and items.")
+    MinecraftForge.EVENT_BUS.register(this)
+
+    OpenComputers.log.debug("Initializing blocks and items.")
 
     Blocks.init()
     Items.init()
 
-    OpenComputers.log.info("Initializing additional OreDict entries.")
+    OpenComputers.log.debug("Initializing additional OreDict entries.")
 
-    OreDictionary.registerOre("craftingPiston", net.minecraft.init.Blocks.piston)
-    OreDictionary.registerOre("craftingPiston", net.minecraft.init.Blocks.sticky_piston)
-    OreDictionary.registerOre("torchRedstoneActive", net.minecraft.init.Blocks.redstone_torch)
-    OreDictionary.registerOre("materialEnderPearl", net.minecraft.init.Items.ender_pearl)
+    OreDictionary.registerOre("craftingPiston", net.minecraft.init.Blocks.PISTON)
+    OreDictionary.registerOre("craftingPiston", net.minecraft.init.Blocks.STICKY_PISTON)
+    OreDictionary.registerOre("torchRedstoneActive", net.minecraft.init.Blocks.REDSTONE_TORCH)
+    OreDictionary.registerOre("materialEnderPearl", net.minecraft.init.Items.ENDER_PEARL)
 
-    tryRegisterNugget[item.IronNugget](Constants.ItemName.IronNugget, "nuggetIron", net.minecraft.init.Items.iron_ingot, "ingotIron")
-    tryRegisterNugget[item.DiamondChip](Constants.ItemName.DiamondChip, "chipDiamond", net.minecraft.init.Items.diamond, "gemDiamond")
+    // Make mods that use old wireless card name not have broken recipes
+    OreDictionary.registerOre("oc:wlanCard", Items.get(Constants.ItemName.WirelessNetworkCardTier2).createItemStack(1))
+
+    tryRegisterNugget[item.DiamondChip](Constants.ItemName.DiamondChip, "chipDiamond", net.minecraft.init.Items.DIAMOND, "gemDiamond")
 
     // Avoid issues with Extra Utilities registering colored obsidian as `obsidian`
     // oredict entry, but not normal obsidian, breaking some recipes.
-    OreDictionary.registerOre("obsidian", net.minecraft.init.Blocks.obsidian)
+    OreDictionary.registerOre("obsidian", net.minecraft.init.Blocks.OBSIDIAN)
 
     // To still allow using normal endstone for crafting drones.
-    OreDictionary.registerOre("oc:stoneEndstone", net.minecraft.init.Blocks.end_stone)
+    OreDictionary.registerOre("oc:stoneEndstone", net.minecraft.init.Blocks.END_STONE)
 
     OpenComputers.log.info("Initializing OpenComputers API.")
 
@@ -69,12 +77,28 @@ class Proxy {
 
     api.API.config = Settings.get.config
 
-    api.Machine.LuaArchitecture =
-      if (LuaStateFactory.isAvailable && !Settings.get.forceLuaJ) classOf[NativeLua52Architecture]
-      else classOf[LuaJLuaArchitecture]
-    api.Machine.add(api.Machine.LuaArchitecture)
-    if (Settings.get.registerLuaJArchitecture)
+    // Weird JNLua bug identified
+    // When loading JNLua (for either 5.2 or 5.3 lua state) there is a static section that the library loads
+    // being static, it loads once regardless of which lua state is loaded first
+    // static { REGISTRYINDEX = lua_registryindex(); }
+    // The problem is that lua_registryindex was removed in 5.3
+    // Thus, if we load JNLua from a lua5.3 state first, this static section fails
+    // We must load 5.2 first, AND we know 5.3 will likely fail to load if 5.2 failed
+    val include52: Boolean = LuaStateFactory.include52
+    // now that JNLua has been initialized from a lua52 state, we are safe to check 5.3
+    if (LuaStateFactory.include53) {
+      api.Machine.add(classOf[NativeLua53Architecture])
+    }
+    if (include52) {
+      api.Machine.add(classOf[NativeLua52Architecture])
+    }
+    if (LuaStateFactory.includeLuaJ) {
       api.Machine.add(classOf[LuaJLuaArchitecture])
+    }
+    
+    api.Machine.LuaArchitecture =
+      if (Settings.get.forceLuaJ) classOf[LuaJLuaArchitecture]
+      else api.Machine.architectures.head
   }
 
   def init(e: FMLInitializationEvent) {
@@ -84,12 +108,12 @@ class Proxy {
     Loot.init()
     Achievement.init()
 
-    EntityRegistry.registerModEntity(classOf[Drone], "Drone", 0, OpenComputers, 80, 1, true)
+    EntityRegistry.registerModEntity(new ResourceLocation(Settings.resourceDomain, "drone"), classOf[Drone], "Drone", 0, OpenComputers, 80, 1, true)
 
-    OpenComputers.log.info("Initializing mod integration.")
+    OpenComputers.log.debug("Initializing mod integration.")
     Mods.init()
 
-    OpenComputers.log.info("Initializing recipes.")
+    OpenComputers.log.debug("Initializing recipes.")
     Recipes.init()
 
     OpenComputers.log.info("Initializing capabilities.")
@@ -147,28 +171,32 @@ class Proxy {
   // Example usage: OpenComputers.ID + ":tabletCase" -> "tabletCase1"
   private val itemRenames = Map[String, String](
     OpenComputers.ID + ":dataCard" -> Constants.ItemName.DataCardTier1,
-    OpenComputers.ID + ":serverRack" -> Constants.BlockName.Rack
+    OpenComputers.ID + ":serverRack" -> Constants.BlockName.Rack,
+    OpenComputers.ID + ":wlanCard" -> Constants.ItemName.WirelessNetworkCardTier2
   )
 
-  def missingMappings(e: FMLMissingMappingsEvent) {
-    for (missing <- e.get()) {
-      if (missing.`type` == GameRegistry.Type.BLOCK) {
-        blockRenames.get(missing.name) match {
+  @SubscribeEvent
+  def missingBlockMappings(e: MissingMappings[Block]) {
+    for (missing <- e.getMappings) {
+        blockRenames.get(missing.key.getResourcePath) match {
           case Some(name) =>
             if (Strings.isNullOrEmpty(name)) missing.ignore()
-            else missing.remap(GameRegistry.findBlock(OpenComputers.ID, name))
+            else missing.remap(Block.REGISTRY.getObject(new ResourceLocation(OpenComputers.ID, name)))
           case _ => missing.warn()
         }
-      }
-      else if (missing.`type` == GameRegistry.Type.ITEM) {
-        itemRenames.get(missing.name) match {
-          case Some(name) =>
-            if (Strings.isNullOrEmpty(name)) missing.ignore()
-            else missing.remap(GameRegistry.findItem(OpenComputers.ID, name))
-          case _ => missing.warn()
-        }
-      }
     }
+  }
+
+  @SubscribeEvent
+  def missingItemMappings(e: MissingMappings[Item]) {
+    for (missing <- e.getMappings) {
+        itemRenames.get(missing.key.getResourcePath) match {
+          case Some(name) =>
+            if (Strings.isNullOrEmpty(name)) missing.ignore()
+            else missing.remap(Item.REGISTRY.getObject(new ResourceLocation(OpenComputers.ID, name)))
+          case _ => missing.warn()
+        }
+      }
   }
 
   // OK, seriously now, I've gotten one too many bug reports because of this Java version being broken.

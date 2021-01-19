@@ -16,15 +16,15 @@ object Waypoints {
 
   @SubscribeEvent
   def onWorldUnload(e: WorldEvent.Unload) {
-    if (!e.world.isRemote) {
-      dimensions.remove(e.world.provider.getDimensionId)
+    if (!e.getWorld.isRemote) {
+      dimensions.remove(e.getWorld.provider.getDimension)
     }
   }
 
   @SubscribeEvent
   def onWorldLoad(e: WorldEvent.Load) {
-    if (!e.world.isRemote) {
-      dimensions.remove(e.world.provider.getDimensionId)
+    if (!e.getWorld.isRemote) {
+      dimensions.remove(e.getWorld.provider.getDimension)
     }
   }
 
@@ -49,13 +49,13 @@ object Waypoints {
   }
 
   def findWaypoints(pos: BlockPosition, range: Double): Iterable[Waypoint] = {
-    dimensions.get(pos.world.get.provider.getDimensionId) match {
+    dimensions.get(pos.world.get.provider.getDimension) match {
       case Some(set) =>
-        val bounds = pos.bounds.expand(range * 0.5, range * 0.5, range * 0.5)
+        val bounds = pos.bounds.grow(range * 0.5, range * 0.5, range * 0.5)
         set.query((bounds.minX, bounds.minY, bounds.minZ), (bounds.maxX, bounds.maxY, bounds.maxZ))
       case _ => Iterable.empty
     }
   }
 
-  private def dimension(waypoint: Waypoint) = waypoint.world.provider.getDimensionId
+  private def dimension(waypoint: Waypoint) = waypoint.world.provider.getDimension
 }

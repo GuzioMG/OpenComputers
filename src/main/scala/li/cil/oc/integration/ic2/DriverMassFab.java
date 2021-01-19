@@ -6,10 +6,10 @@ import li.cil.oc.api.driver.NamedBlock;
 import li.cil.oc.api.machine.Arguments;
 import li.cil.oc.api.machine.Callback;
 import li.cil.oc.api.machine.Context;
+import li.cil.oc.api.prefab.AbstractManagedEnvironment;
 import li.cil.oc.api.prefab.DriverSidedTileEntity;
-import li.cil.oc.api.prefab.ManagedEnvironment;
 import li.cil.oc.integration.ManagedTileEntityEnvironment;
-import net.minecraft.util.BlockPos;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.world.World;
 
@@ -20,7 +20,7 @@ public final class DriverMassFab extends DriverSidedTileEntity {
     }
 
     @Override
-    public ManagedEnvironment createEnvironment(final World world, final BlockPos pos, final EnumFacing side) {
+    public AbstractManagedEnvironment createEnvironment(final World world, final BlockPos pos, final EnumFacing side) {
         return new Environment((TileEntityMatter) world.getTileEntity(pos));
     }
 

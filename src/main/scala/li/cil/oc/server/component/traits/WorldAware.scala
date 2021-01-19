@@ -9,17 +9,18 @@ import net.minecraft.entity.Entity
 import net.minecraft.entity.EntityLivingBase
 import net.minecraft.entity.item.EntityMinecart
 import net.minecraft.entity.player.EntityPlayer
-import net.minecraft.util.AxisAlignedBB
 import net.minecraft.util.EnumFacing
+import net.minecraft.util.EnumHand
+import net.minecraft.util.math.AxisAlignedBB
 import net.minecraft.world.WorldServer
 import net.minecraftforge.common.MinecraftForge
 import net.minecraftforge.common.util.FakePlayerFactory
-import net.minecraftforge.event.ForgeEventFactory
-import net.minecraftforge.event.entity.player.PlayerInteractEvent.Action
+import net.minecraftforge.event.entity.player.PlayerInteractEvent
 import net.minecraftforge.event.world.BlockEvent
 import net.minecraftforge.fluids.FluidRegistry
 import net.minecraftforge.fml.common.eventhandler.Event.Result
 import net.minecraftforge.items.IItemHandler
+import net.minecraftforge.items.wrapper.InvWrapper
 
 trait WorldAware {
   def position: BlockPosition
@@ -36,8 +37,9 @@ trait WorldAware {
 
   def mayInteract(blockPos: BlockPosition, face: EnumFacing): Boolean = {
     try {
-      val event = ForgeEventFactory.onPlayerInteract(fakePlayer, Action.RIGHT_CLICK_BLOCK, world, blockPos.toBlockPos, face)
-      !event.isCanceled && event.useBlock != Result.DENY
+      val event = new PlayerInteractEvent.RightClickBlock(fakePlayer, EnumHand.MAIN_HAND, blockPos.toBlockPos, face, null)
+      MinecraftForge.EVENT_BUS.post(event)
+      !event.isCanceled && event.getUseBlock != Result.DENY
     } catch {
       case t: Throwable =>
         OpenComputers.log.warn("Some event handler threw up while checking for permission to access a block.", t)
@@ -45,7 +47,10 @@ trait WorldAware {
     }
   }
 
-  def mayInteract(blockPos: BlockPosition, side: EnumFacing, inventory: IItemHandler): Boolean = mayInteract(blockPos, side) // This uses the inventory object in 1.9+
+  def mayInteract(blockPos: BlockPosition, side: EnumFacing, inventory: IItemHandler): Boolean = mayInteract(blockPos, side) && (inventory match {
+    case inv: InvWrapper if inv.getInv != null => inv.getInv.isUsableByPlayer(fakePlayer)
+    case _ => true
+  })
 
   def entitiesInBounds[Type <: Entity](clazz: Class[Type], bounds: AxisAlignedBB) = {
     world.getEntitiesWithinAABB(clazz, bounds)

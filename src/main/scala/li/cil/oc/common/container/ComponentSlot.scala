@@ -27,16 +27,16 @@ abstract class ComponentSlot(inventory: IInventory, index: Int, x: Int, y: Int) 
   def hasBackground = backgroundLocation != null
 
   @SideOnly(Side.CLIENT)
-  override def canBeHovered = slot != common.Slot.None && tier != common.Tier.None && super.canBeHovered
+  override def isEnabled = slot != common.Slot.None && tier != common.Tier.None && super.isEnabled
 
   override def isItemValid(stack: ItemStack) = inventory.isItemValidForSlot(getSlotIndex, stack)
 
-  override def onPickupFromSlot(player: EntityPlayer, stack: ItemStack) {
-    super.onPickupFromSlot(player, stack)
+  override def onTake(player: EntityPlayer, stack: ItemStack) = {
     for (slot <- container.inventorySlots) slot match {
       case dynamic: ComponentSlot => dynamic.clearIfInvalid(player)
       case _ =>
     }
+    super.onTake(player, stack)
   }
 
   override def putStack(stack: ItemStack): Unit = {

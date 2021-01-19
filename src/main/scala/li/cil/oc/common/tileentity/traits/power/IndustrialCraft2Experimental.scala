@@ -18,13 +18,13 @@ import net.minecraftforge.fml.common.eventhandler.Event
 trait IndustrialCraft2Experimental extends Common with IndustrialCraft2Common with traits.Tickable {
   private var conversionBuffer = 0.0
 
-  private lazy val useIndustrialCraft2Power = isServer && Mods.IndustrialCraft2.isAvailable
+  private lazy val useIndustrialCraft2Power = isServer && Mods.IndustrialCraft2.isModAvailable
 
   // ----------------------------------------------------------------------- //
 
   override def updateEntity() {
     super.updateEntity()
-    if (useIndustrialCraft2Power && world.getTotalWorldTime % Settings.get.tickFrequency == 0) {
+    if (useIndustrialCraft2Power && getWorld.getTotalWorldTime % Settings.get.tickFrequency == 0) {
       updateEnergy()
     }
   }

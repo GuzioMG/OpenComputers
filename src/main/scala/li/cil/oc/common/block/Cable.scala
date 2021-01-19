@@ -1,27 +1,25 @@
 package li.cil.oc.common.block
 
+import java.util
+
+import li.cil.oc.common.block.property.UnlistedInteger
 import li.cil.oc.common.capabilities.Capabilities
 import li.cil.oc.common.tileentity
 import li.cil.oc.util.Color
 import net.minecraft.block.Block
-import net.minecraft.block.state.BlockState
 import net.minecraft.block.state.IBlockState
-import net.minecraft.entity.EntityLivingBase
 import net.minecraft.entity.player.EntityPlayer
-import net.minecraft.item.EnumDyeColor
-import net.minecraft.item.ItemStack
+import net.minecraft.entity.{Entity, EntityLivingBase}
+import net.minecraft.item.{EnumDyeColor, ItemStack}
 import net.minecraft.tileentity.TileEntity
-import net.minecraft.util.AxisAlignedBB
-import net.minecraft.util.BlockPos
 import net.minecraft.util.EnumFacing
-import net.minecraft.util.MovingObjectPosition
+import net.minecraft.util.math.{AxisAlignedBB, BlockPos, RayTraceResult, Vec3d}
 import net.minecraft.world.IBlockAccess
 import net.minecraft.world.World
 import net.minecraftforge.common.property.ExtendedBlockState
 import net.minecraftforge.common.property.IExtendedBlockState
-import net.minecraftforge.fml.relauncher.Side
-import net.minecraftforge.fml.relauncher.SideOnly
 
+import scala.collection.JavaConversions._
 import scala.reflect.ClassTag
 
 class Cable(protected implicit val tileTag: ClassTag[tileentity.Cable]) extends SimpleBlock with traits.CustomDrops[tileentity.Cable] {
@@ -33,35 +31,65 @@ class Cable(protected implicit val tileTag: ClassTag[tileentity.Cable]) extends 
 
   // ----------------------------------------------------------------------- //
 
-  override def createBlockState(): BlockState = new ExtendedBlockState(this, Array.empty, Array(property.PropertyTile.Tile))
+  override def createBlockState() = new ExtendedBlockState(this, Array.empty, Array(Cable.NeighborsProp,Cable.ColorProp, Cable.IsSideCableProp))
 
   override def getExtendedState(state: IBlockState, world: IBlockAccess, pos: BlockPos): IBlockState =
     (state, world.getTileEntity(pos)) match {
       case (extendedState: IExtendedBlockState, cable: tileentity.Cable) =>
-        extendedState.withProperty(property.PropertyTile.Tile, cable)
+        var isCableMask = 0
+        for (side <- EnumFacing.values) {
+          if (world.getTileEntity(pos.offset(side)).isInstanceOf[tileentity.Cable]){
+            isCableMask = Cable.mask(side, isCableMask)
+          }
+        }
+        extendedState.withProperty(Cable.NeighborsProp, Int.box(Cable.neighbors(world,pos))).withProperty(Cable.ColorProp, Int.box(cable.getColor)).withProperty(Cable.IsSideCableProp, Int.box(isCableMask))
       case _ => state
     }
 
   // ----------------------------------------------------------------------- //
 
-  override def isOpaqueCube = false
+  override def isOpaqueCube(state: IBlockState): Boolean = false
 
-  override def isFullCube = false
+  override def isFullCube(state: IBlockState): Boolean = false
 
-  @SideOnly(Side.CLIENT) override
-  def colorMultiplier(world: IBlockAccess, pos: BlockPos, renderPass: Int) = colorMultiplierOverride.getOrElse(super.colorMultiplier(world, pos, renderPass))
+  override def shouldSideBeRendered(state: IBlockState, world: IBlockAccess, pos: BlockPos, side: EnumFacing) = true
 
-  override def shouldSideBeRendered(world: IBlockAccess, pos: BlockPos, side: EnumFacing) = true
-
-  override def isSideSolid(world: IBlockAccess, pos: BlockPos, side: EnumFacing) = false
+  override def isSideSolid(state: IBlockState, world: IBlockAccess, pos: BlockPos, side: EnumFacing) = false
 
   // ----------------------------------------------------------------------- //
 
-  override def getPickBlock(target: MovingObjectPosition, world: World, pos: BlockPos) =
+  override def getPickBlock(state: IBlockState, target: RayTraceResult, world: World, pos: BlockPos, player: EntityPlayer) =
     world.getTileEntity(pos) match {
       case t: tileentity.Cable => t.createItemStack()
-      case _ => null
+      case _ => createItemStack()
     }
+
+  override def getBoundingBox(state: IBlockState, world: IBlockAccess, pos: BlockPos): AxisAlignedBB = Cable.bounds(world, pos)
+
+  override def addCollisionBoxToList(state: IBlockState, worldIn: World, pos: BlockPos, entityBox: AxisAlignedBB, collidingBoxes: util.List[AxisAlignedBB], entityIn: Entity, isActualState: Boolean): Unit = {
+    Cable.parts(worldIn, pos, entityBox, collidingBoxes)
+  }
+
+  override def collisionRayTrace(state: IBlockState, world: World, pos: BlockPos, start: Vec3d, end: Vec3d): RayTraceResult = {
+    var distance = Double.PositiveInfinity
+    var result: RayTraceResult = null
+
+    val boxes = new util.ArrayList[AxisAlignedBB]
+    Cable.parts(world, pos, Block.FULL_BLOCK_AABB.offset(pos), boxes)
+    for (part: AxisAlignedBB <- boxes) {
+      val hit = part.calculateIntercept(start, end)
+      if (hit != null) {
+        val hitDistance = hit.hitVec.squareDistanceTo(start)
+        if (hitDistance < distance) {
+          distance = hitDistance;
+          result = hit;
+        }
+      }
+    }
+
+    if (result == null) null
+    else new RayTraceResult(result.hitVec, result.sideHit, pos)
+  }
 
   // ----------------------------------------------------------------------- //
 
@@ -69,13 +97,9 @@ class Cable(protected implicit val tileTag: ClassTag[tileentity.Cable]) extends 
 
   // ----------------------------------------------------------------------- //
 
-  override def onNeighborBlockChange(world: World, pos: BlockPos, state: IBlockState, neighborBlock: Block) {
-    world.markBlockForUpdate(pos)
-    super.onNeighborBlockChange(world, pos, state, neighborBlock)
-  }
-
-  override def setBlockBoundsBasedOnState(world: IBlockAccess, pos: BlockPos): Unit = {
-    setBlockBounds(Cable.bounds(world, pos))
+  override def neighborChanged(state: IBlockState, world: World, pos: BlockPos, neighborBlock: Block, sourcePos: BlockPos) {
+    world.notifyBlockUpdate(pos, state, state, 3)
+    super.neighborChanged(state, world, pos, neighborBlock, sourcePos)
   }
 
   override protected def doCustomInit(tileEntity: tileentity.Cable, player: EntityLivingBase, stack: ItemStack): Unit = {
@@ -94,31 +118,32 @@ class Cable(protected implicit val tileTag: ClassTag[tileentity.Cable]) extends 
 }
 
 object Cable {
+  final val MIN = 0.375
+  final val MAX = 1 - MIN
+
+  final val DefaultBounds: AxisAlignedBB = new AxisAlignedBB(MIN, MIN, MIN, MAX, MAX, MAX)
+
+  final val CachedParts: Array[AxisAlignedBB] = Array(
+    new AxisAlignedBB( MIN, 0, MIN, MAX, MIN, MAX ), // Down
+    new AxisAlignedBB( MIN, MAX, MIN, MAX, 1, MAX ), // Up
+    new AxisAlignedBB( MIN, MIN, 0, MAX, MAX, MIN ), // North
+    new AxisAlignedBB( MIN, MIN, MAX, MAX, MAX, 1 ), // South
+    new AxisAlignedBB( 0, MIN, MIN, MIN, MAX, MAX ), // West
+    new AxisAlignedBB( MAX, MIN, MIN, 1, MAX, MAX )) // East
+
   final val CachedBounds = {
     // 6 directions = 6 bits = 11111111b >> 2 = 0xFF >> 2
     (0 to 0xFF >> 2).map(mask => {
-      var minX = -0.125
-      var minY = -0.125
-      var minZ = -0.125
-      var maxX = 0.125
-      var maxY = 0.125
-      var maxZ = 0.125
-      for (side <- EnumFacing.values) {
-        if (((1 << side.getIndex) & mask) != 0) {
-          if (side.getFrontOffsetX < 0) minX += side.getFrontOffsetX * 0.375
-          else maxX += side.getFrontOffsetX * 0.375
-          if (side.getFrontOffsetY < 0) minY += side.getFrontOffsetY * 0.375
-          else maxY += side.getFrontOffsetY * 0.375
-          if (side.getFrontOffsetZ < 0) minZ += side.getFrontOffsetZ * 0.375
-          else maxZ += side.getFrontOffsetZ * 0.375
-        }
-      }
-      AxisAlignedBB.fromBounds(
-        minX + 0.5, minY + 0.5, minZ + 0.5,
-        maxX + 0.5, maxY + 0.5, maxZ + 0.5)
+      EnumFacing.VALUES.foldLeft(DefaultBounds)((bound, side) => {
+        if (((1 << side.getIndex) & mask) != 0) bound.union(CachedParts(side.ordinal()))
+        else bound
+      })
     }).toArray
   }
-  final val DefaultBounds = CachedBounds(0)
+
+  final val NeighborsProp = new UnlistedInteger("neighbors")
+  final val ColorProp = new UnlistedInteger("color")
+  final val IsSideCableProp = new UnlistedInteger("is_cable")
 
   def mask(side: EnumFacing, value: Int = 0) = value | (1 << side.getIndex)
 
@@ -147,6 +172,19 @@ object Cable {
   }
 
   def bounds(world: IBlockAccess, pos: BlockPos) = Cable.CachedBounds(Cable.neighbors(world, pos))
+
+  def parts(world: IBlockAccess, pos: BlockPos, entityBox : AxisAlignedBB, boxes : util.List[AxisAlignedBB]) = {
+    val center = Cable.DefaultBounds.offset(pos)
+    if (entityBox.intersects(center)) boxes.add(center)
+
+    val mask = Cable.neighbors(world, pos)
+    for (side <- EnumFacing.VALUES) {
+      if(((1 << side.getIndex) & mask) != 0) {
+        val part = Cable.CachedParts(side.ordinal()).offset(pos)
+        if (entityBox.intersects(part)) boxes.add(part)
+      }
+    }
+  }
 
   private def hasNetworkNode(tileEntity: TileEntity, side: EnumFacing): Boolean = {
     if (tileEntity != null) {

@@ -2,26 +2,21 @@ package li.cil.oc.server.driver
 
 import com.google.common.base.Strings
 import li.cil.oc.api.driver
+import li.cil.oc.api.driver.DriverBlock
 import li.cil.oc.api.driver.NamedBlock
 import li.cil.oc.api.network.ManagedEnvironment
 import net.minecraft.inventory.IInventory
 import net.minecraft.item.Item
 import net.minecraft.item.ItemStack
 import net.minecraft.tileentity.TileEntity
-import net.minecraft.util.BlockPos
 import net.minecraft.util.EnumFacing
+import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 
-// TODO Remove blocks in OC 1.7.
-class CompoundBlockDriver(val sidedBlocks: Array[driver.SidedBlock], val blocks: Array[driver.Block]) extends driver.SidedBlock {
-  override def createEnvironment(world: World, pos: BlockPos, side: EnumFacing) = {
+class CompoundBlockDriver(val sidedBlocks: Array[DriverBlock]) extends DriverBlock {
+  override def createEnvironment(world: World, pos: BlockPos, side: EnumFacing): CompoundBlockEnvironment = {
     val list = sidedBlocks.map {
       driver => Option(driver.createEnvironment(world, pos, side)) match {
-        case Some(environment) => (driver.getClass.getName, environment)
-        case _ => null
-      }
-    } ++ blocks.map {
-      driver => Option(driver.createEnvironment(world, pos)) match {
         case Some(environment) => (driver.getClass.getName, environment)
         case _ => null
       }
@@ -30,10 +25,10 @@ class CompoundBlockDriver(val sidedBlocks: Array[driver.SidedBlock], val blocks:
     else new CompoundBlockEnvironment(cleanName(tryGetName(world, pos, list.map(_._2))), list: _*)
   }
 
-  override def worksWith(world: World, pos: BlockPos, side: EnumFacing) = sidedBlocks.forall(_.worksWith(world, pos, side)) && blocks.forall(_.worksWith(world, pos))
+  override def worksWith(world: World, pos: BlockPos, side: EnumFacing): Boolean = sidedBlocks.forall(_.worksWith(world, pos, side))
 
-  override def equals(obj: Any) = obj match {
-    case multi: CompoundBlockDriver if multi.sidedBlocks.length == sidedBlocks.length && multi.blocks.length == blocks.length => sidedBlocks.intersect(multi.sidedBlocks).length == sidedBlocks.length && blocks.intersect(multi.blocks).length == blocks.length
+  override def equals(obj: Any): Boolean = obj match {
+    case multi: CompoundBlockDriver if multi.sidedBlocks.length == sidedBlocks.length => sidedBlocks.intersect(multi.sidedBlocks).length == sidedBlocks.length
     case _ => false
   }
 
@@ -53,7 +48,7 @@ class CompoundBlockDriver(val sidedBlocks: Array[driver.SidedBlock], val blocks:
     try {
       val block = world.getBlockState(pos).getBlock
       val stack = if (Item.getItemFromBlock(block) != null) {
-        Some(new ItemStack(block, 1, block.getDamageValue(world, pos)))
+        Some(new ItemStack(block, 1, block.damageDropped(world.getBlockState(pos))))
       }
       else None
       if (stack.isDefined) {
@@ -64,7 +59,7 @@ class CompoundBlockDriver(val sidedBlocks: Array[driver.SidedBlock], val blocks:
     }
     try world.getTileEntity(pos) match {
       case tileEntity: TileEntity =>
-        return TileEntity.classToNameMap.get(tileEntity.getClass)
+        return TileEntity.getKey(tileEntity.getClass).getResourcePath
     } catch {
       case _: Throwable =>
     }

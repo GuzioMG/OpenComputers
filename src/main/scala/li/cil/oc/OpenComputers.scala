@@ -9,6 +9,7 @@ import net.minecraftforge.fml.common.SidedProxy
 import net.minecraftforge.fml.common.event.FMLInterModComms.IMCEvent
 import net.minecraftforge.fml.common.event._
 import net.minecraftforge.fml.common.network.FMLEventChannel
+import li.cil.oc.util.ThreadPoolFactory
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
 
@@ -16,13 +17,13 @@ import org.apache.logging.log4j.Logger
   version = OpenComputers.Version,
   modLanguage = "scala", useMetadata = true /*@MCVERSIONDEP@*/)
 object OpenComputers {
-  final val ID = "OpenComputers"
+  final val ID = "opencomputers"
 
   final val Name = "OpenComputers"
 
   final val Version = "@VERSION@"
 
-  def log = logger.getOrElse(LogManager.getLogger(Name))
+  def log: Logger = logger.getOrElse(LogManager.getLogger(Name))
 
   var logger: Option[Logger] = None
 
@@ -39,23 +40,28 @@ object OpenComputers {
   }
 
   @EventHandler
-  def init(e: FMLInitializationEvent) = {
+  def init(e: FMLInitializationEvent): Unit = {
     proxy.init(e)
     OpenComputers.log.info("Done with init phase.")
   }
 
   @EventHandler
-  def postInit(e: FMLPostInitializationEvent) = {
+  def postInit(e: FMLPostInitializationEvent): Unit = {
     proxy.postInit(e)
     OpenComputers.log.info("Done with post init phase.")
   }
 
   @EventHandler
-  def missingMappings(e: FMLMissingMappingsEvent) = proxy.missingMappings(e)
+  def serverStart(e: FMLServerStartingEvent): Unit = {
+    CommandHandler.register(e)
+    ThreadPoolFactory.safePools.foreach(_.newThreadPool())
+  }
 
   @EventHandler
-  def serverStart(e: FMLServerStartingEvent) = CommandHandler.register(e)
+  def serverStop(e: FMLServerStoppedEvent): Unit = {
+    ThreadPoolFactory.safePools.foreach(_.waitForCompletion())
+  }
 
   @EventHandler
-  def imc(e: IMCEvent) = IMC.handleEvent(e)
+  def imc(e: IMCEvent): Unit = IMC.handleEvent(e)
 }

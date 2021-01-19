@@ -9,6 +9,7 @@ import li.cil.oc.integration.util.Wrench
 import li.cil.oc.util.RenderState
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.GlStateManager
+import net.minecraft.client.renderer.OpenGlHelper
 import net.minecraft.client.renderer.Tessellator
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats
@@ -37,8 +38,8 @@ object ScreenRenderer extends TileEntitySpecialRenderer[Screen] {
   // Rendering
   // ----------------------------------------------------------------------- //
 
-  override def renderTileEntityAt(screen: Screen, x: Double, y: Double, z: Double, f: Float, damage: Int) {
-    RenderState.checkError(getClass.getName + ".renderTileEntityAt: entering (aka: wasntme)")
+  override def render(screen: Screen, x: Double, y: Double, z: Double, f: Float, damage: Int, alpha: Float) {
+    RenderState.checkError(getClass.getName + ".render: entering (aka: wasntme)")
 
     this.screen = screen
     if (!screen.isOrigin) {
@@ -50,17 +51,22 @@ object ScreenRenderer extends TileEntitySpecialRenderer[Screen] {
       return
     }
 
+    // y = block.bottom - player.feet
+    // eye is higher, so the y delta should be more negative
+    val eye_delta: Double = y - Minecraft.getMinecraft.player.getEyeHeight
+
     // Crude check whether screen text can be seen by the local player based
     // on the player's position -> angle relative to screen.
     val screenFacing = screen.facing.getOpposite
-    if (screenFacing.getFrontOffsetX * (x + 0.5) + screenFacing.getFrontOffsetY * (y + 0.5) + screenFacing.getFrontOffsetZ * (z + 0.5) < 0) {
+    if (screenFacing.getFrontOffsetX * (x + 0.5) + screenFacing.getFrontOffsetY * (eye_delta + 0.5) + screenFacing.getFrontOffsetZ * (z + 0.5) < 0) {
       return
     }
 
-    RenderState.checkError(getClass.getName + ".renderTileEntityAt: checks")
+    RenderState.checkError(getClass.getName + ".render: checks")
 
     RenderState.pushAttrib()
 
+    OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 0xFF, 0xFF)
     RenderState.disableEntityLighting()
     RenderState.makeItBlend()
     GlStateManager.color(1, 1, 1, 1)
@@ -69,11 +75,11 @@ object ScreenRenderer extends TileEntitySpecialRenderer[Screen] {
 
     GlStateManager.translate(x + 0.5, y + 0.5, z + 0.5)
 
-    RenderState.checkError(getClass.getName + ".renderTileEntityAt: setup")
+    RenderState.checkError(getClass.getName + ".render: setup")
 
     drawOverlay()
 
-    RenderState.checkError(getClass.getName + ".renderTileEntityAt: overlay")
+    RenderState.checkError(getClass.getName + ".render: overlay")
 
     if (distance > fadeDistanceSq) {
       val alpha = math.max(0, 1 - ((distance - fadeDistanceSq) * fadeRatio).toFloat)
@@ -83,7 +89,7 @@ object ScreenRenderer extends TileEntitySpecialRenderer[Screen] {
       }
     }
 
-    RenderState.checkError(getClass.getName + ".renderTileEntityAt: fade")
+    RenderState.checkError(getClass.getName + ".render: fade")
 
     if (screen.buffer.isRenderingEnabled) {
       draw()
@@ -95,7 +101,7 @@ object ScreenRenderer extends TileEntitySpecialRenderer[Screen] {
     GlStateManager.popMatrix()
     RenderState.popAttrib()
 
-    RenderState.checkError(getClass.getName + ".renderTileEntityAt: leaving")
+    RenderState.checkError(getClass.getName + ".render: leaving")
   }
 
   private def transform() {
@@ -121,16 +127,16 @@ object ScreenRenderer extends TileEntitySpecialRenderer[Screen] {
 
   private def drawOverlay() = if (screen.facing == EnumFacing.UP || screen.facing == EnumFacing.DOWN) {
     // Show up vector overlay when holding same screen block.
-    val stack = Minecraft.getMinecraft.thePlayer.getHeldItem
-    if (stack != null) {
-      if (Wrench.holdsApplicableWrench(Minecraft.getMinecraft.thePlayer, screen.getPos) || screens.contains(api.Items.get(stack))) {
+    val stack = Minecraft.getMinecraft.player.getHeldItemMainhand
+    if (!stack.isEmpty) {
+      if (Wrench.holdsApplicableWrench(Minecraft.getMinecraft.player, screen.getPos) || screens.contains(api.Items.get(stack))) {
         GlStateManager.pushMatrix()
         transform()
         GlStateManager.depthMask(false)
         GlStateManager.translate(screen.width / 2f - 0.5f, screen.height / 2f - 0.5f, 0.05f)
 
         val t = Tessellator.getInstance
-        val r = t.getWorldRenderer
+        val r = t.getBuffer
 
         Textures.Block.bind()
         r.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX)
@@ -198,7 +204,7 @@ object ScreenRenderer extends TileEntitySpecialRenderer[Screen] {
   }
 
   private def playerDistanceSq() = {
-    val player = Minecraft.getMinecraft.thePlayer
+    val player = Minecraft.getMinecraft.player
     val bounds = screen.getRenderBoundingBox
 
     val px = player.posX

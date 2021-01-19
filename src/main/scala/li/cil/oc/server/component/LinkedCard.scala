@@ -13,19 +13,21 @@ import li.cil.oc.api.machine.Context
 import li.cil.oc.api.network._
 import li.cil.oc.api.driver.DeviceInfo
 import li.cil.oc.api.prefab
+import li.cil.oc.api.prefab.AbstractManagedEnvironment
+import li.cil.oc.common.Tier
 import li.cil.oc.server.network.QuantumNetwork
 import net.minecraft.nbt.NBTTagCompound
 
 import scala.collection.convert.WrapAsJava._
 import scala.collection.convert.WrapAsScala._
 
-class LinkedCard extends prefab.ManagedEnvironment with QuantumNetwork.QuantumNode with DeviceInfo {
+class LinkedCard extends AbstractManagedEnvironment with QuantumNetwork.QuantumNode with DeviceInfo with traits.WakeMessageAware {
   override val node = Network.newNode(this, Visibility.Network).
     withComponent("tunnel", Visibility.Neighbors).
     withConnector().
     create()
 
-  var tunnel = "creative"
+  var tunnel: String = "creative"
 
   // ----------------------------------------------------------------------- //
 
@@ -34,7 +36,8 @@ class LinkedCard extends prefab.ManagedEnvironment with QuantumNetwork.QuantumNo
     DeviceAttribute.Description -> "Quantumnet controller",
     DeviceAttribute.Vendor -> Constants.DeviceInfo.DefaultVendor,
     DeviceAttribute.Product -> "HyperLink IV: Ender Edition",
-    DeviceAttribute.Capacity -> Settings.get.maxNetworkPacketSize.toString
+    DeviceAttribute.Capacity -> Settings.get.maxNetworkPacketSize.toString,
+    DeviceAttribute.Width -> Settings.get.maxNetworkPacketParts.toString
   )
 
   override def getDeviceInfo: util.Map[String, String] = deviceInfo
@@ -46,7 +49,7 @@ class LinkedCard extends prefab.ManagedEnvironment with QuantumNetwork.QuantumNo
     val endpoints = QuantumNetwork.getEndpoints(tunnel).filter(_ != this)
     // Cast to iterable to use Scala's toArray instead of the Arguments' one (which converts byte arrays to Strings).
     val packet = Network.newPacket(node.address, null, 0, args.asInstanceOf[java.lang.Iterable[AnyRef]].toArray)
-    if (node.tryChangeBuffer(-(packet.size / 32.0 + Settings.get.wirelessCostPerRange * Settings.get.maxWirelessRange * 5))) {
+    if (node.tryChangeBuffer(-(packet.size / 32.0 + Settings.get.wirelessCostPerRange(Tier.Two) * Settings.get.maxWirelessRange(Tier.Two) * 5))) {
       for (endpoint <- endpoints) {
         endpoint.receivePacket(packet)
       }
@@ -55,12 +58,14 @@ class LinkedCard extends prefab.ManagedEnvironment with QuantumNetwork.QuantumNo
     else result(Unit, "not enough energy")
   }
 
-  @Callback(direct = true, doc = """function():number -- Gets the maximum packet size (config setting).""")
+  @Callback(direct = true, doc = "function():number -- Gets the maximum packet size (config setting).")
   def maxPacketSize(context: Context, args: Arguments): Array[AnyRef] = result(Settings.get.maxNetworkPacketSize)
 
-  def receivePacket(packet: Packet) {
-    val distance = 0
-    node.sendToReachable("computer.signal", Seq("modem_message", packet.source, Int.box(packet.port), Double.box(distance)) ++ packet.data: _*)
+  def receivePacket(packet: Packet): Unit = receivePacket(packet, 0, null)
+
+  @Callback(direct = true, doc = "function():string -- Gets this link card's shared channel address")
+  def getChannel(context: Context, args: Arguments): Array[AnyRef] = {
+    result(this.tunnel)
   }
 
   // ----------------------------------------------------------------------- //
@@ -81,15 +86,19 @@ class LinkedCard extends prefab.ManagedEnvironment with QuantumNetwork.QuantumNo
 
   // ----------------------------------------------------------------------- //
 
+  private final val TunnelTag = Settings.namespace + "tunnel"
+
   override def load(nbt: NBTTagCompound) {
     super.load(nbt)
-    if (nbt.hasKey(Settings.namespace + "tunnel")) {
-      tunnel = nbt.getString(Settings.namespace + "tunnel")
+    if (nbt.hasKey(TunnelTag)) {
+      tunnel = nbt.getString(TunnelTag)
     }
+    loadWakeMessage(nbt)
   }
 
   override def save(nbt: NBTTagCompound) {
     super.save(nbt)
-    nbt.setString(Settings.namespace + "tunnel", tunnel)
+    nbt.setString(TunnelTag, tunnel)
+    saveWakeMessage(nbt)
   }
 }

@@ -13,7 +13,7 @@ import net.minecraft.client.gui.GuiButton
 import net.minecraft.client.renderer.GlStateManager
 import net.minecraft.entity.player.InventoryPlayer
 import net.minecraft.inventory.Slot
-import net.minecraft.util.IChatComponent
+import net.minecraft.util.text.ITextComponent
 
 import scala.collection.convert.WrapAsJava._
 import scala.collection.convert.WrapAsScala._
@@ -33,7 +33,7 @@ class Assembler(playerInventory: InventoryPlayer, val assembler: tileentity.Asse
     info = validate
   }
 
-  var info: Option[(Boolean, IChatComponent, Array[IChatComponent])] = None
+  var info: Option[(Boolean, ITextComponent, Array[ITextComponent])] = None
 
   protected var runButton: ImageButton = _
 
@@ -55,7 +55,7 @@ class Assembler(playerInventory: InventoryPlayer, val assembler: tileentity.Asse
     add(buttonList, runButton)
   }
 
-  override def drawSecondaryForegroundLayer(mouseX: Int, mouseY: Int) = {
+  override def drawSecondaryForegroundLayer(mouseX: Int, mouseY: Int): Unit = {
     RenderState.pushAttrib()
     if (!inventoryContainer.isAssembling) {
       val message =
@@ -67,7 +67,7 @@ class Assembler(playerInventory: InventoryPlayer, val assembler: tileentity.Asse
           case _ if inventoryContainer.getSlot(0).getHasStack => Localization.Assembler.CollectResult
           case _ => ""
         }
-      fontRendererObj.drawString(message, 30, 94, 0x404040)
+      fontRenderer.drawString(message, 30, 94, 0x404040)
       if (runButton.isMouseOver) {
         val tooltip = new java.util.ArrayList[String]
         tooltip.add(Localization.Assembler.Run)
@@ -76,14 +76,14 @@ class Assembler(playerInventory: InventoryPlayer, val assembler: tileentity.Asse
             tooltip.addAll(warnings.map(_.getUnformattedText).toList)
           }
         }
-        copiedDrawHoveringText(tooltip, mouseX - guiLeft, mouseY - guiTop, fontRendererObj)
+        copiedDrawHoveringText(tooltip, mouseX - guiLeft, mouseY - guiTop, fontRenderer)
       }
     }
     else if (isPointInRegion(progress.x, progress.y, progress.width, progress.height, mouseX, mouseY)) {
       val tooltip = new java.util.ArrayList[String]
       val timeRemaining = formatTime(inventoryContainer.assemblyRemainingTime)
       tooltip.add(Localization.Assembler.Progress(inventoryContainer.assemblyProgress, timeRemaining))
-      copiedDrawHoveringText(tooltip, mouseX - guiLeft, mouseY - guiTop, fontRendererObj)
+      copiedDrawHoveringText(tooltip, mouseX - guiLeft, mouseY - guiTop, fontRenderer)
     }
     RenderState.popAttrib()
   }

@@ -9,16 +9,19 @@ import li.cil.oc.api.Driver
 import li.cil.oc.api.driver.DeviceInfo
 import li.cil.oc.api.driver.DeviceInfo.DeviceAttribute
 import li.cil.oc.api.driver.DeviceInfo.DeviceClass
+import li.cil.oc.api.driver.DriverBlock
 import li.cil.oc.api.internal
 import li.cil.oc.api.network.Analyzable
 import li.cil.oc.api.network._
 import li.cil.oc.common.Slot
 import li.cil.oc.server.{PacketSender => ServerPacketSender}
 import net.minecraft.entity.player.EntityPlayer
+import net.minecraft.init.SoundEvents
 import net.minecraft.item.ItemStack
 import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.nbt.NBTTagList
 import net.minecraft.util.EnumFacing
+import net.minecraft.util.SoundCategory
 import net.minecraftforge.common.util.Constants.NBT
 
 import scala.collection.convert.WrapAsJava._
@@ -27,7 +30,7 @@ import scala.collection.mutable
 class Adapter extends traits.Environment with traits.ComponentInventory with traits.Tickable with traits.OpenSides with Analyzable with internal.Adapter with DeviceInfo {
   val node = api.Network.newNode(this, Visibility.Network).create()
 
-  private val blocks = Array.fill[Option[(ManagedEnvironment, api.driver.SidedBlock)]](6)(None)
+  private val blocks = Array.fill[Option[(ManagedEnvironment, DriverBlock)]](6)(None)
 
   private val updatingBlocks = mutable.ArrayBuffer.empty[ManagedEnvironment]
 
@@ -50,18 +53,23 @@ class Adapter extends traits.Environment with traits.ComponentInventory with tra
     super.setSideOpen(side, value)
     if (isServer) {
       ServerPacketSender.sendAdapterState(this)
-      world.playSoundEffect(x + 0.5, y + 0.5, z + 0.5, "tile.piston.out", 0.5f, world.rand.nextFloat() * 0.25f + 0.7f)
-      world.notifyNeighborsOfStateChange(getPos, getBlockType)
+      getWorld.playSound(null, x + 0.5, y + 0.5, z + 0.5, SoundEvents.BLOCK_PISTON_EXTEND, SoundCategory.BLOCKS, 0.5f, getWorld.rand.nextFloat() * 0.25f + 0.7f)
+      getWorld.notifyNeighborsOfStateChange(getPos, getBlockType, false)
       neighborChanged(side)
     } else {
-      world.markBlockForUpdate(getPos)
+      getWorld.notifyBlockUpdate(getPos, getWorld.getBlockState(getPos), getWorld.getBlockState(getPos), 3)
     }
   }
 
   // ----------------------------------------------------------------------- //
 
-  override def onAnalyze(player: EntityPlayer, side: EnumFacing, hitX: Float, hitY: Float, hitZ: Float) = blocks collect {
-    case Some(((environment, _))) => environment.node
+  override def onAnalyze(player: EntityPlayer, side: EnumFacing, hitX: Float, hitY: Float, hitZ: Float): Array[Node] = {
+    (blocks collect {
+      case Some((environment, _)) => environment.node
+    }) ++
+    (components collect {
+      case Some(environment) => environment.node
+    })
   }
 
   // ----------------------------------------------------------------------- //
@@ -78,15 +86,15 @@ class Adapter extends traits.Environment with traits.ComponentInventory with tra
   def neighborChanged(d: EnumFacing) {
     if (node != null && node.network != null) {
       val blockPos = getPos.offset(d)
-      world.getTileEntity(blockPos) match {
-        case env: traits.Environment =>
+      getWorld.getTileEntity(blockPos) match {
+        case _: traits.Environment =>
         // Don't provide adaption for our stuffs. This is mostly to avoid
         // cables and other non-functional stuff popping up in the adapter
         // due to having a power interface. Might revisit this at some point,
         // but the only 'downside' is that it can't be used to manipulate
         // inventories, which I actually consider a plus :P
         case _ =>
-          Option(api.Driver.driverFor(world, blockPos, d)) match {
+          Option(api.Driver.driverFor(getWorld, blockPos, d)) match {
             case Some(newDriver) if isSideOpen(d) => blocks(d.ordinal()) match {
               case Some((oldEnvironment, driver)) =>
                 if (newDriver != driver) {
@@ -97,7 +105,7 @@ class Adapter extends traits.Environment with traits.ComponentInventory with tra
                   node.disconnect(oldEnvironment.node)
 
                   // Then rebuild - if we have something.
-                  val environment = newDriver.createEnvironment(world, blockPos, d)
+                  val environment = newDriver.createEnvironment(getWorld, blockPos, d)
                   if (environment != null) {
                     blocks(d.ordinal()) = Some((environment, newDriver))
                     if (environment.canUpdate) {
@@ -112,7 +120,7 @@ class Adapter extends traits.Environment with traits.ComponentInventory with tra
                   return
                 }
                 // A challenger appears. Maybe.
-                val environment = newDriver.createEnvironment(world, blockPos, d)
+                val environment = newDriver.createEnvironment(getWorld, blockPos, d)
                 if (environment != null) {
                   blocks(d.ordinal()) = Some((environment, newDriver))
                   if (environment.canUpdate) {
@@ -177,17 +185,21 @@ class Adapter extends traits.Environment with traits.ComponentInventory with tra
 
   // ----------------------------------------------------------------------- //
 
+  private final val BlocksTag = Settings.namespace + "adapter.blocks"
+  private final val BlockNameTag = "name"
+  private final val BlockDataTag = "data"
+
   override def readFromNBTForServer(nbt: NBTTagCompound) {
     super.readFromNBTForServer(nbt)
 
-    val blocksNbt = nbt.getTagList(Settings.namespace + "adapter.blocks", NBT.TAG_COMPOUND)
+    val blocksNbt = nbt.getTagList(BlocksTag, NBT.TAG_COMPOUND)
     (0 until (blocksNbt.tagCount min blocksData.length)).
       map(blocksNbt.getCompoundTagAt).
       zipWithIndex.
       foreach {
         case (blockNbt, i) =>
-          if (blockNbt.hasKey("name") && blockNbt.hasKey("data")) {
-            blocksData(i) = Some(new BlockData(blockNbt.getString("name"), blockNbt.getCompoundTag("data")))
+          if (blockNbt.hasKey(BlockNameTag) && blockNbt.hasKey(BlockDataTag)) {
+            blocksData(i) = Some(new BlockData(blockNbt.getString(BlockNameTag), blockNbt.getCompoundTag(BlockDataTag)))
           }
       }
   }
@@ -204,13 +216,13 @@ class Adapter extends traits.Environment with traits.ComponentInventory with tra
             case Some((environment, _)) => environment.save(data.data)
             case _ =>
           }
-          blockNbt.setString("name", data.name)
-          blockNbt.setTag("data", data.data)
+          blockNbt.setString(BlockNameTag, data.name)
+          blockNbt.setTag(BlockDataTag, data.data)
         case _ =>
       }
       blocksNbt.appendTag(blockNbt)
     }
-    nbt.setTag(Settings.namespace + "adapter.blocks", blocksNbt)
+    nbt.setTag(BlocksTag, blocksNbt)
   }
 
   // ----------------------------------------------------------------------- //

@@ -23,13 +23,14 @@ options =
 {
   cmd = "cp",
   i = options.i,
+  f = options.f,
   n = options.n,
   r = options.r,
   u = options.u,
   P = options.P,
   v = options.v,
   x = options.x,
-  skip = options.skip,
+  skip = {options.skip},
 }
 
 return transfer.batch(args, options)

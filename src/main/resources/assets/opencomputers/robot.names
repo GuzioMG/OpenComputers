@@ -16,6 +16,7 @@ Anson Argyris      # Perry Rhodan
 ASIMO              # Honda
 Atlas              # Portal
 Augustus           # Perry Rhodan
+Autobot            # Transfomers
 Ava                # Ex Machina
 Baymax             # Big Hero 6
 BB-8               # Star Wars
@@ -32,6 +33,7 @@ Clank              # Ratchet & Clank
 Claptrap           # Borderlands
 Codsworth          # Fallout 4
 Continuity         # Mona Lisa Overdrive
+Cortana            # Halo
 Crypto             # Kodos
 Curiosity          # Mars Rover
 Daedalus           # Deus Ex
@@ -39,6 +41,7 @@ Dalek Sec          # Doctor Who
 Data               # Star Trek
 David              # A.I. (the movie)
 Death Trap         # Borderlands 2's Mechromancer
+Decepticon         # Transformers
 Deep Thought       # Hitchhiker's Guide to the Galaxy
 Deputy ANDY        # Eureka
 Dog                # Half-Life
@@ -52,17 +55,24 @@ E.V.E              # Anno 2070
 Eve                # Wall-E
 Fact Core          # Portal
 Flexo              # Futurama
-Gerty              # Moon (film)
+Gerty              # Moon
+Ghost              # I, Robot quote "There have always been ghosts in the machine"
 GLaDOS             # Portal
+Gipsy Danger       # Pacific Rim
+G.U.N.T.E.R.       # Lost in Space
 HAL 9000           # Space Odyssey
+Harbinger          # Mass Effect
 Harkness           # Fallout 3
 Heron              # Vexatos
 Hex                # Discworld
 Homunk             # Perry Rhodan
 *Hyun-ae           # Analogue: A Hate Story / Hate Plus
 Icarus             # Deus Ex
+İkiyüzonaltı       # [TR] G.O.R.A
+Jaeger             # Pacific Rim (means hunter)
 J.A.R.V.I.S.       # Iron Man
 Johnny 5           # Short Circuit
+Legion             # Mass Effect
 LizzyTrickster     # Contributor
 K-9                # Doctor Who
 KARR               # Knight Rider
@@ -72,14 +82,19 @@ Kodos              # Contributor
 Laire              # Perry Rhodan
 Loader 1340        # Borderlands 2
 LordFokas          # Contributor
+Maria              # Metropolis
 Marvin             # Hitchhiker's Guide to the Galaxy
 Mawhrin-skel       # The Player of Games (Iain M Banks)
 Michiyo            # Contributor
 *Mute              # Analogue: A Hate Story / Hate Plus
 Mycroft Holmes     # The Moon Is a Harsh Mistress
+Pac-Man            # Pac-Man
+Optimus            # Transformers. Seperated "Optimus Prime" into two names, as both are quite fitting robot names.
+Ordis              # Warframe
 P-Body             # Portal
 Pintsize           # Questionable Content
 PixelToast         # Contributor
+Prime              # Transformers. Seperated "Optimus Prime" into two names, as both are quite fitting robot names.
 QT-1               # I, Robot
 R. Daneel Olivaw   # Isaac Asimov's
 R. Giskard Reventlov # Isaac Asimov's
@@ -92,16 +107,21 @@ Skaffen-Amtiskaw   # Use of weapons (Iain M Banks)
 Shakey             # The first general-purpose mobile robot that could reason about its actions.
 SHODAN             # System Shock
 Skynet             # Terminator
+Sonny              # I, Robot
+Sovereign          # Mass Effect
 Space Core         # Portal
 SpiritedDusty      # Contributor
+T.A.R.S            # Interstellar
 T-800              # Terminator
 T-1000             # Terminator
 Tachikoma          # Ghost in the Shell
 TARA UH            # Perry Rhodan
 Terminator         # Terminator
+Rinzler            # Tron
 Twiki              # Buck Rodgers
 Uniblab            # The Jetsons
 Unimate            # First programmable robot.
+VEGA               # Doom 2016
 Vertigo            # Perry Rhodan
 Vexatos            # Contributor
 V.I.K.I.           # Virtual Interactive Kinetic Intelligence - I, Robot
@@ -111,3 +131,4 @@ Weebo              # Flubber
 Wheatley           # Portal
 Wintermute         # Neuromancer
 Wobbo              # Contributor
+Yui-MHCP001        # AKA Yui (Mental Health Counseling Program 001) - Sword Art Online

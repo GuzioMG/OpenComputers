@@ -2,12 +2,24 @@ package li.cil.oc.server.fs
 
 import java.io
 import java.io.FileNotFoundException
+import java.nio.ByteBuffer
+import java.util.concurrent.CancellationException
+import java.util.concurrent.Future
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
+import li.cil.oc.OpenComputers
 import li.cil.oc.api.fs.Mode
+import li.cil.oc.util.ThreadPoolFactory
+import li.cil.oc.util.SafeThreadPool
 import net.minecraft.nbt.NBTTagCompound
 import org.apache.commons.io.FileUtils
 
 import scala.collection.mutable
+
+object Buffered {
+  val fileSaveHandler: SafeThreadPool = ThreadPoolFactory.createSafePool("FileSystem", 1)
+}
 
 trait Buffered extends OutputStreamFileSystem {
   protected def fileRoot: io.File
@@ -16,7 +28,7 @@ trait Buffered extends OutputStreamFileSystem {
 
   // ----------------------------------------------------------------------- //
 
-  override def delete(path: String) = {
+  override def delete(path: String): Boolean = {
     if (super.delete(path)) {
       deletions += path -> System.currentTimeMillis()
       true
@@ -24,7 +36,7 @@ trait Buffered extends OutputStreamFileSystem {
     else false
   }
 
-  override def rename(from: String, to: String) = {
+  override def rename(from: String, to: String): Boolean = {
     if (super.rename(from, to)) {
       deletions += from -> System.currentTimeMillis()
       true
@@ -34,7 +46,20 @@ trait Buffered extends OutputStreamFileSystem {
 
   // ----------------------------------------------------------------------- //
 
-  override def load(nbt: NBTTagCompound) = {
+  private var saving: Option[Future[_]] = None
+
+  override def load(nbt: NBTTagCompound): Unit = {
+    saving.foreach(f => try {
+      f.get(120L, TimeUnit.SECONDS)
+    } catch {
+      case e: TimeoutException => OpenComputers.log.warn("Waiting for filesystem to save took two minutes! Aborting.")
+      case e: CancellationException => // NO-OP
+    })
+    loadFiles(nbt)
+    super.load(nbt)
+  }
+
+  private def loadFiles(nbt: NBTTagCompound): Unit = this.synchronized {
     def recurse(path: String, directory: io.File) {
       makeDirectory(path)
       for (child <- directory.listFiles() if FileSystem.isValidFilename(child.getName)) {
@@ -74,13 +99,16 @@ trait Buffered extends OutputStreamFileSystem {
       fileRoot.delete()
     }
     else recurse("", fileRoot)
-
-    super.load(nbt)
   }
 
-  override def save(nbt: NBTTagCompound) = {
+  override def save(nbt: NBTTagCompound): Unit = {
     super.save(nbt)
+    saving = Buffered.fileSaveHandler.withPool(_.submit(new Runnable {
+      override def run(): Unit = saveFiles()
+    }))
+  }
 
+  def saveFiles(): Unit = this.synchronized {
     for ((path, time) <- deletions) {
       val file = new io.File(fileRoot, path)
       if (FileUtils.isFileOlder(file, time))
@@ -88,13 +116,15 @@ trait Buffered extends OutputStreamFileSystem {
     }
     deletions.clear()
 
-    def recurse(path: String) {
+    val buffer = ByteBuffer.allocateDirect(16 * 1024)
+    def recurse(path: String):Boolean = {
       val directory = new io.File(fileRoot, path)
       directory.mkdirs()
+      var dirChanged = false
       for (child <- list(path)) {
         val childPath = path + child
         if (isDirectory(childPath))
-          recurse(childPath)
+          dirChanged = recurse(childPath) || dirChanged
         else {
           val childFile = new io.File(fileRoot, childPath)
           val time = lastModified(childPath)
@@ -103,14 +133,30 @@ trait Buffered extends OutputStreamFileSystem {
             childFile.createNewFile()
             val out = new io.FileOutputStream(childFile).getChannel
             val in = openInputChannel(childPath).get
-            out.transferFrom(in, 0, Long.MaxValue)
+
+            buffer.clear()
+            while (in.read(buffer) != -1) {
+              buffer.flip()
+              out.write(buffer)
+              buffer.compact()
+            }
+
+            buffer.flip()
+            while (buffer.hasRemaining) {
+              out.write(buffer)
+            }
+
             out.close()
             in.close()
             childFile.setLastModified(time)
+            dirChanged = true
           }
         }
       }
-      directory.setLastModified(lastModified(path))
+      if (dirChanged) {
+        directory.setLastModified(lastModified(path))
+        true
+      } else false
     }
     if (list("") == null || list("").isEmpty) {
       fileRoot.delete()

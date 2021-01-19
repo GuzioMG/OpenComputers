@@ -2,7 +2,6 @@ local component = require("component")
 local unicode = require("unicode")
 
 local filesystem = {}
-local isAutorunEnabled = nil
 local mtab = {name="", children={}, links={}}
 local fstab = {}
 
@@ -19,17 +18,6 @@ local function segments(path)
     end
   end
   return parts
-end
-
-local function saveConfig()
-  local root = filesystem.get("/")
-  if root and not root.isReadOnly() then
-    local f = filesystem.open("/etc/filesystem.cfg", "w")
-    if f then
-      f:write("autorun="..tostring(isAutorunEnabled))
-      f:close()
-    end
-  end
 end
 
 local function findNode(path, create, resolve_links)
@@ -93,27 +81,6 @@ local function findNode(path, create, resolve_links)
 end
 
 -------------------------------------------------------------------------------
-
-function filesystem.isAutorunEnabled()
-  if isAutorunEnabled == nil then
-    local env = {}
-    local config = loadfile("/etc/filesystem.cfg", nil, env)
-    if config then
-      pcall(config)
-      isAutorunEnabled = not not env.autorun
-    else
-      isAutorunEnabled = true
-    end
-    saveConfig()
-  end
-  return isAutorunEnabled
-end
-
-function filesystem.setAutorunEnabled(value)
-  checkArg(1, value, "boolean")
-  isAutorunEnabled = value
-  saveConfig()
-end
 
 function filesystem.canonical(path)
   local result = table.concat(segments(path), "/")
@@ -184,8 +151,8 @@ function filesystem.mount(fs, path)
       return nil, why
     end
 
-    if filesystem.exists(real) then
-      return nil, "file already exists"
+    if filesystem.exists(real) and not filesystem.isDirectory(real) then
+      return nil, "mount point is not a directory"
     end
   end
 
@@ -234,23 +201,13 @@ function filesystem.name(path)
   return parts[#parts]
 end
 
-function filesystem.proxy(filter)
+function filesystem.proxy(filter, options)
   checkArg(1, filter, "string")
-  local address
-  for c in component.list("filesystem", true) do
-    if component.invoke(c, "getLabel") == filter then
-      address = c
-      break
-    end
-    if c:sub(1, filter:len()) == filter then
-      address = c
-      break
-    end
+  if not component.list("filesystem")[filter] or next(options or {}) then
+    -- if not, load fs full library, it has a smarter proxy that also supports options
+    return filesystem.internal.proxy(filter, options)
   end
-  if not address then
-    return nil, "no such file system"
-  end
-  return component.proxy(address)
+  return component.proxy(filter) -- it might be a perfect match
 end
 
 function filesystem.exists(path)
@@ -308,14 +265,6 @@ function filesystem.list(path)
   end
 end
 
-function filesystem.remove(path)
-  return require("tools/fsmod").remove(path, findNode)
-end
-
-function filesystem.rename(oldPath, newPath)
-  return require("tools/fsmod").rename(oldPath, newPath, findNode)
-end
-
 function filesystem.open(path, mode)
   checkArg(1, path, "string")
   mode = tostring(mode or "r")
@@ -337,30 +286,22 @@ function filesystem.open(path, mode)
     return nil, reason
   end
 
-  local function create_handle_method(key)
-    return function(self, ...)
-      if not self.handle then
-        return nil, "file is closed"
-      end
-      return self.fs[key](self.handle, ...)
-    end
-  end
-
-  local stream =
-  {
+  return setmetatable({
     fs = node.fs,
     handle = handle,
-    close = function(self)
-      if self.handle then
-        self.fs.close(self.handle)
+  }, {__index = function(tbl, key)
+    if not tbl.fs[key] then return end
+    if not tbl.handle then
+      return nil, "file is closed"
+    end
+    return function(self, ...)
+      local h = self.handle
+      if key == "close" then
         self.handle = nil
       end
+      return self.fs[key](h, ...)
     end
-  }
-  stream.read = create_handle_method("read")
-  stream.seek = create_handle_method("seek")
-  stream.write = create_handle_method("write")
-  return stream
+  end})
 end
 
 filesystem.findNode = findNode

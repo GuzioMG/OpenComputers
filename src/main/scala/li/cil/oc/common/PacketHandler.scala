@@ -16,9 +16,10 @@ import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.entity.player.EntityPlayerMP
 import net.minecraft.item.ItemStack
 import net.minecraft.nbt.CompressedStreamTools
+import net.minecraft.nbt.NBTTagCompound
 import net.minecraft.network.INetHandler
-import net.minecraft.util.BlockPos
 import net.minecraft.util.EnumFacing
+import net.minecraft.util.math.BlockPos
 import net.minecraft.world.World
 import net.minecraftforge.fml.common.FMLCommonHandler
 
@@ -33,8 +34,12 @@ abstract class PacketHandler {
       process(data, player)
     }
     else {
+      data.retain()
       thread.addScheduledTask(new Runnable {
-        override def run(): Unit = process(data, player)
+        override def run(): Unit = {
+          process(data, player)
+          data.release()
+        }
       })
     }
   }
@@ -123,20 +128,20 @@ abstract class PacketHandler {
       getEntity[T](dimension, id)
     }
 
-    def readDirection() = readByte() match {
+    def readDirection(): Option[EnumFacing] = readByte() match {
       case id if id < 0 => None
       case id => Option(EnumFacing.getFront(id))
     }
 
-    def readItemStack() = {
+    def readItemStack(): ItemStack = {
       val haveStack = readBoolean()
       if (haveStack) {
-        ItemStack.loadItemStackFromNBT(readNBT())
+        new ItemStack(readNBT())
       }
-      else null
+      else ItemStack.EMPTY
     }
 
-    def readNBT() = {
+    def readNBT(): NBTTagCompound = {
       val haveNbt = readBoolean()
       if (haveNbt) {
         CompressedStreamTools.read(this)

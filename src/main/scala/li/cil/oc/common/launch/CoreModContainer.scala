@@ -8,10 +8,10 @@ import net.minecraftforge.fml.common.ModMetadata
 class CoreModContainer extends DummyModContainer({
   val md = new ModMetadata()
   md.authorList.add("Sangar")
-  md.modId = "OpenComputers|Core"
+  md.modId = "opencomputers|core"
   md.version = "@VERSION@"
   md.name = "OpenComputers (Core)"
-  md.url = "http://oc.cil.li/"
+  md.url = "https://oc.cil.li/"
   md.description = "OC core mod used for class transformer and as API owner to avoid cyclic dependencies."
   md
 }) {

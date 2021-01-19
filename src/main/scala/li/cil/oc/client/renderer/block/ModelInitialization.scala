@@ -10,17 +10,16 @@ import net.minecraft.block.Block
 import net.minecraft.block.state.IBlockState
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.ItemMeshDefinition
+import net.minecraft.client.renderer.block.model.IBakedModel
+import net.minecraft.client.renderer.block.model.ModelBakery
+import net.minecraft.client.renderer.block.model.ModelResourceLocation
 import net.minecraft.client.renderer.block.statemap.StateMapperBase
-import net.minecraft.client.resources.model.IBakedModel
-import net.minecraft.client.resources.model.ModelBakery
-import net.minecraft.client.resources.model.ModelResourceLocation
 import net.minecraft.item.Item
 import net.minecraft.item.ItemStack
-import net.minecraft.util.RegistrySimple
-import net.minecraftforge.client.event.ModelBakeEvent
-import net.minecraftforge.client.model.IFlexibleBakedModel
-import net.minecraftforge.client.model.ISmartBlockModel
-import net.minecraftforge.client.model.ModelLoader
+import net.minecraft.util.ResourceLocation
+import net.minecraft.util.registry.RegistrySimple
+import net.minecraftforge.client.event.{ModelBakeEvent, ModelRegistryEvent}
+import net.minecraftforge.client.model.{ModelLoader, ModelLoaderRegistry}
 import net.minecraftforge.common.MinecraftForge
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent
 
@@ -54,7 +53,8 @@ object ModelInitialization {
     registerModel(Constants.BlockName.RobotAfterimage, RobotAfterimageBlockLocation, RobotAfterimageItemLocation)
   }
 
-  def init(): Unit = {
+  @SubscribeEvent
+  def onModelRegistration(event: ModelRegistryEvent): Unit = {
     registerItems()
     registerSubItems()
     registerSubItemsCustom()
@@ -87,13 +87,13 @@ object ModelInitialization {
 
     ModelLoader.setCustomModelResourceLocation(stack.getItem, stack.getMetadata, itemLocation)
     ModelLoader.setCustomStateMapper(block, new StateMapperBase {
-      override def getModelResourceLocation(state: IBlockState) = blockLocation
+      override def getModelResourceLocation(state: IBlockState): ModelResourceLocation = blockLocation
     })
   }
 
   private def registerItems(): Unit = {
     val meshDefinition = new ItemMeshDefinition {
-      override def getModelLocation(stack: ItemStack) = {
+      override def getModelLocation(stack: ItemStack): ModelResourceLocation = {
         Option(api.Items.get(stack)) match {
           case Some(descriptor) =>
             val location = Settings.resourceDomain + ":" + descriptor.name()
@@ -103,27 +103,24 @@ object ModelInitialization {
       }
     }
 
-    val modelMeshes = Minecraft.getMinecraft.getRenderItem.getItemModelMesher
     for (item <- meshableItems) {
-      modelMeshes.register(item, meshDefinition)
+      ModelLoader.setCustomMeshDefinition(item, meshDefinition)
     }
     meshableItems.clear()
   }
 
   private def registerSubItems(): Unit = {
-    val modelMeshes = Minecraft.getMinecraft.getRenderItem.getItemModelMesher
     for ((id, item) <- itemDelegates) {
       val location = Settings.resourceDomain + ":" + id
-      modelMeshes.register(item.parent, item.itemId, new ModelResourceLocation(location, "inventory"))
-      ModelBakery.addVariantName(item.parent, location)
+      ModelLoader.setCustomModelResourceLocation(item.parent, item.itemId, new ModelResourceLocation(location, "inventory"))
+      ModelBakery.registerItemVariants(item.parent, new ResourceLocation(location))
     }
     itemDelegates.clear()
   }
 
   private def registerSubItemsCustom(): Unit = {
-    val modelMeshes = Minecraft.getMinecraft.getRenderItem.getItemModelMesher
     for (item <- itemDelegatesCustom) {
-      modelMeshes.register(item.parent, new ItemMeshDefinition {
+      ModelLoader.setCustomMeshDefinition(item.parent, new ItemMeshDefinition {
         override def getModelLocation(stack: ItemStack): ModelResourceLocation = Delegator.subItem(stack) match {
           case Some(subItem: CustomModel) => subItem.getModelLocation(stack)
           case _ => null
@@ -137,7 +134,7 @@ object ModelInitialization {
 
   @SubscribeEvent
   def onModelBake(e: ModelBakeEvent): Unit = {
-    val registry = e.modelRegistry.asInstanceOf[RegistrySimple[ModelResourceLocation, IBakedModel]]
+    val registry = e.getModelRegistry.asInstanceOf[RegistrySimple[ModelResourceLocation, IBakedModel]]
 
     registry.putObject(CableBlockLocation, CableModel)
     registry.putObject(CableItemLocation, CableModel)
@@ -154,7 +151,7 @@ object ModelInitialization {
       item.bakeModels(e)
     }
 
-    val modelOverrides = Map[String, IFlexibleBakedModel => ISmartBlockModel](
+    val modelOverrides = Map[String, IBakedModel => IBakedModel](
       Constants.BlockName.ScreenTier1 -> (_ => ScreenModel),
       Constants.BlockName.ScreenTier2 -> (_ => ScreenModel),
       Constants.BlockName.ScreenTier3 -> (_ => ScreenModel),
@@ -163,7 +160,7 @@ object ModelInitialization {
 
     registry.getKeys.collect {
       case location: ModelResourceLocation => registry.getObject(location) match {
-        case parent: IFlexibleBakedModel =>
+        case parent: IBakedModel =>
           for ((name, model) <- modelOverrides) {
             val pattern = s"^${Settings.resourceDomain}:$name#.*"
             if (location.toString.matches(pattern)) {
