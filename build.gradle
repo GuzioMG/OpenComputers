@@ -66,11 +66,6 @@ minecraft {
     replace "/*@MCVERSIONDEP@*/", ", acceptedMinecraftVersions = \"[${config.minecraft.version}]\""
 }
 
-repositories {
-    maven { url "https://maven.cil.li/" }
-    maven { url "https://minecraft.curseforge.com/api/maven/" }
-}
-
 configurations {
     embedded
     compile.extendsFrom provided, embedded
