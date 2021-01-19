@@ -1,113 +1,109 @@
 ![Welcome to OpenComputers](assets/misc/banner.png)
 
-OpenComputers is a Minecraft mod that adds programmable computers and robots to the game. The built-in computer implementation uses Lua 5.2 and is fully persistent. This means programs will continue running across reloads. For more information, please [see the wiki][wiki]. Feel invited to visit the [community forums][forums] or drop by in the [IRC channel #oc on esper.net][irc].
+# [OpenComputers](https://github.com/MightyPirates/OpenComputers) 2
 
-A few useful links:
-* [Minecraft Forum Thread][mcf]
-* [Downloads][releases]
-* [Bug Tracker][issues]
-* [Wiki][wiki]
-* [Ingame Manual][ingame manual]
-* [IRC][irc]
-* [Community Forums][forums]
+This is a fork of OpenComputers intended to rebuild it ground-up for Fabric.
 
-### Experimental Builds
-You can find experimental builds [on the build server][jenkins]. Expect these to be generally more unstable than builds marked as releases. Use these **at your own risk**, but - when using the latest one - please *do* report bugs you encounter using them. Thanks!
+## A slight mess caused by licenses
 
-## License / Use in Modpacks
-This mod is [licensed under the **MIT license**](https://github.com/MightyPirates/OpenComputers/blob/master-MC1.7.10/LICENSE). All **assets are public domain**, unless otherwise stated; all are free to be distributed as long as the license / source credits are kept. This means you can use this mod in any mod pack **as you please**. I'd be happy to hear about you using it, though, just out of curiosity.
+> This mod is licensed under the MIT license. All assets are public domain unless otherwise stated; all are free to be distributed as long as the license/source credits are kept.
 
-## Contributing
-### Assets and Localizations
-1. **Translations**  
-   Translations to other languages are very much appreciated. You can find the localization files [in this folder][localizations]. If a localization you wanted to create already exists, please take the time to see if the present one is complete - the strings change every so often, invalidating some of the translations. If you start a fresh localization, please base it off of the English or German one, those are the 'master' localization files. If you add a new language, please also add it to [the pack.mcmeta][pack.mcmeta] file. Keep it sorted alphabetically, use the name and region Minecraft itself uses. If you don't know how to do that, that's OK, I'll do it later.
-2. **Textures**  
-   If you would like to contribute better textures for certain items or blocks, feel free to pull-request them. If you would like to contribute *alternative* textures, make it a resource pack, and post it on the forums, for example.
-3. **Documentation**  
-   Help with keeping the [wiki][] up to date would be *really* appreciated. If you notice anything amiss and know better, fix it. If you don't ask someone who does, then fix it. If you had a question answered, consider adding that information somewhere in the wiki where you would have expected to find that information.  
-   There are also the files containing the ingame help [for programs][manpages] and [for blocks and items][manual], which could probably be much better than they are right now. Improvements to them, and new ones (e.g. for the libraries, such as `text` or `sides`) would help a lot. Thanks!
-4. **Robot Names**  
-   Robots get a random name when placed (unless set with an Anvil). The list the names are chose from [can be found here][robot names]. Feel free to pull request additional names! *However*: since the list has grown to a considerable length already, here are the two basic criteria for new names: it must either be a real or fictional robot, or an AI that at least *appears* to be self-aware.
+That's what is said in [former OpenComputers' README.md](https://github.com/MightyPirates/OpenComputers/blob/master-MC1.7.10/README.md)
 
-### Bug fixes, features and scripts
-1. **Bugs**  
-   If you've found a bug, please report it in the [issue tracker][issues], after checking it has not been reported before - and possibly even fixed by now. If you think you can and have fixed it, feel free to do a pull request, I'll happily pull it if it looks all right to me - otherwise I'll gladly tell you what to change to get it merged.
-2. **Features**  
-   If you'd like to propose a new feature, take it to the [forums][] or the [issue tracker][issues]. If you'd like to contribute code that adds new features, please make sure to discuss the feature with me, first - again, the issue tracker is an OK place for this, there are a couple of feature requests there, already. Alternatively start a topic on the forums to discuss the feature, and / or stop by the [IRC][irc] to talk about it. Blind / unexpected feature pull requests might very well not make it, so save yourself some time by talking about it, first! Thanks.
-3. **Scripts / Programs**  
-   OpenComputers generates floppy disks in dungeon chests that can contain data from a selection of 'loot' directories. For example, the IRC client and OPPM (a package manager) are two programs that can be found on such loot disks. If you'd like to contribute a program that can be found this way, please have a look at [the loot readme][loot], which explains how to add custom loot. Simply pull request your loot!
-4. **Core Scripts**  
-   If you would like to contribute scripts to the "core" Lua code (which basically defines 'OpenOS'), please have a look at the [code conventions][] for Lua to save us all some time. Bug fixes are always welcome. Additional programs and features should be kept small. Bigger programs (rule of thumb: larger than 3KiB) should go onto loot disks.
-5. **Drivers**  
-   As of OC 1.4, mod interaction that was previously provided by OpenComponents it now fully integrated into OC itself. If you wish to contribute a driver for blocks from other mods, cool! Have a look at the [integration][] package to get an idea of how to structure modules and read the readme in that package for more information (in particular on additional criteria to get your PR merged).
+Now, what does that mean? It means that everything is licensed under MIT except files stored in `/assets/.` and `/src/main/resources/.` because those files are assets, so they belong to the public domain meaning you can do whatever you want with them.  That includes changing licenses (or at least I think so - there is a slight chance I just accidentally committed a license fraud).
 
-#### Pull requests
-The following are a few quick guidelines on pull requests. That is to say they are not necessarily *rules*, so there may be exceptions and all that. Just try to stick to those points as a baseline.
-- Make sure your code is formatted properly.
-- Make sure it builds and works.
-- Try to keep your changes as minimal as possible. In particular, no whitespace changes in existing files, please.
-- Feel free to code in Java, but don't be surprised if I convert it to Scala later on, if I feel it makes the code more concise ;-)
-- When adding mod dependencies, keep them *weak*, i.e. make sure OC still works without that mod. Also, prefer adding a Gradle dependency over adding API class files to the repo.
-- [Squash](http://gitready.com/advanced/2009/02/10/squashing-commits-with-rebase.html) your commits!
+So - I [changed the license](https://github.com/GuzioMG/OpenComputers/commit/2c3a50c364f2cc3e408500ce086b9caaf13d82f2). The new one is GPL2.
 
-Also, and this should go without saying, your contributed code will also fall under OC's license, unless otherwise specified (in the super rare case of adding third-party stuff, add the according license information as a `LICENSE-???` file, please).
+> Hol'up! U cant just randomly change licenses!!!
 
-## Extending
-### In your own mod
-To use [the API][api] in your own mod, either get the API JAR from the [build server][jenkins], or if you're using [Gradle](http://gradle.org/), add a dependency to the maven repo:
-```groovy
-repositories {
-    maven { url = "http://maven.cil.li/" }
-}
-dependencies {
-    compile "li.cil.oc:OpenComputers:MC1.7.10-1.5.+:api"
+That's right - there's indeed a little catch:
+
+* First of all, whatever enters the public domain - stays in the public domain forever. This is why original assets still belong to... every single human being, basically. That's said, all the alterations belong* to me under GPL2. So, if I adjust the hue of an individual pixel on top of a texture, everything around that pixel is still public domain, the previous version of the image is also PD, but that pixel is now GPL2. Or at least I think so - there is a significant chance I just accidentally committed license fraud, which is less than ideal. _*belong might not have been the best choice of words here, but nobody cares._
+
+* Second of all, I had to [nuke the source code and everything that's not an asset](https://github.com/GuzioMG/OpenComputers/commit/20ca1cbef24ef27c3b73fbc9202b4b6453e02431). Now in most cases of Fabric-ports, that should not be a problem. Here it is. That's because I skipped a few files. They were fixed in [the next commit](https://github.com/GuzioMG/OpenComputers/commit/3d2faf9a7c8d348ded065d36847e3c2712a59de9). But even then - I still skipped 3 files. Those files were `/LICENSE`, `/README.md` and `/.gitignore` because:
+
+> I was planning on fully replacing the first 2 ones.
+
+> I just decided that the `.gitignore` is small and insignificant enough to just be... well... ignored (primarily because it looks exactly the same for 80% of Java projects).
+
+I hope that nobody will dispute over two entirely replaced files and one tiny, easily-replicable file.
+
+### TL;DR
+
+* Feel free to use this in modpacks.
+
+* Refer to the `/LICENSE` file.
+
+* Project is licenced under GPL2, but some parts of assets might still be PD.
+
+* There is a slight chance I totally misunderstood the law, and this project might be an accidential license fraud.
+
+* Original code [here](https://github.com/MightyPirates/OpenComputers).
+
+## My plans and some rules
+
+* I know it's very controversial, but I'm planning on changing the runtime from LUA to Python. The reason is simple - **OpenComputers LUA API is a HOT MESS AND DOCUMENTATION HELL** and I don't have a full lifetime to finish this port because I'd have to wiggle back-and-forth trying to figure out what does what.
+
+* Use Krita for textures and keep the Krita file.
+
+* Some kind of thermal system?
+
+* README.md will be re-written when I decide that this project is in a somewhat usable state.
+
+* Tight integration between AE2 and OC2 is planned (by tight, I don't mean "OC2 will depend on AE2". All I want is for OC2 to be able to dive deeply into the AE2 ME network, e.g.
+ transfer items directly to robots and storages attached to OC interfaces,
+ allow robots to perform AE2 auto-crafting tasks (some new kind of ME pattern?),
+ manually control ME interfaces, import/export buses, annihilation plates, etc.
+, allow screens to take items in and out of the ME network,
+ etc.
+
+
+* Usage of single-line if statements is not only permitted but actually encouraged in some cases. Usually, you want to use them when checking conditions for an event, e.g.:
+
+```
+onClick{ //That's not a proper method definition, I know.
+   if(!playerUsedCorrectItem) return;
 }
 ```
-Adjust the version number accordingly to the version you'd like to build against.
 
-To run the mod in your development environment, download the [`dev` JAR from the build server][dev-jar] and drop it into your development environment's `eclipse/mods` (Eclipse) or `run/mods` (IntelliJ IDEA) folder.
+...is better than...
 
-Alternatively, leave out the `api` classifier and you can build against the dev JAR directly. This way you don't have to add it to your mods folder, but you will have to add `-Dfml.coreMods.load=li.cil.oc.common.launch.TransformerLoader` to the VM options in your run configuration.
+```
+onClick{ //That's not a proper method definition, I know.
+   if(!playerUsedCorrectItem) {
+      return;
+   }
+}
+```
 
-If you have any questions, please do not hesitate to ask, either in the [forums][] or in the [IRC][irc]!
+...and is *certainly* better than this abomination of a code:
 
-### OpenComputers
-Want to tinker with the mod itself? Here is how - for IntelliJ IDEA users.
+```
+onClick{ //That's not a proper method definition, I know.
+   if(playerUsedCorrectItem){
+      //Stuff is run here
+   }
+}
+```
 
-**Important**
-- Make sure you have the Gradle plugin enabled in IntelliJ IDEA (File->Settings->Plugins).
-- Make sure you have the Scala plugin enabled.
+* Advanced multi-screen, -keyboard, -GPU, etc. support.
 
-Clone the repository, then in it run  
-`gradlew setupDecompWorkspace`  
-to setup the workspace, including assets and such, then  
-`gradlew idea`  
-to create an IntelliJ IDEA project.
+* Better (i.e. actually somewhat usable) sound.
 
-Open the project and you will be asked to *import the Gradle project* (check your Event Log if you missed the pop-up). **Do so**. This will configure additionally referenced libraries.
+* I know this is something only annoying, 13-15yo programmers do, but it just so happens that at the time of writing, I'm still inside this age range. So... please align your code, ie.
 
-For more specific instructions, read [Steps to run master MC1.7.10 from IDEA][idea_1.7.10]
+```
+boolean VaribleOne   = false;
+boolean VaribleTwo   = null ;
+boolean VaribleThree = true ;
+```
 
-In the case you wish to use Eclipse rather than IntelliJ IDEA, the process is mostly the same, except you must run `gradlew eclipse` rather than `gradlew idea`.
+...is better than...
 
+```
+boolean VaribleOne = false;
+boolean VaribleTwo = null;
+boolean VaribleThree = true;
+```
 
-
-[api]: https://github.com/MightyPirates/OpenComputers/tree/master-MC1.7.10/src/main/java/li/cil/oc/api
-[code conventions]: https://ocdoc.cil.li/lua_conventions
-[dev-jar]: https://ci.cil.li/view/OpenComputers/job/OpenComputers-MC1.7.10/
-[forums]: https://oc.cil.li/
-[irc]: http://webchat.esper.net/?channels=#oc
-[issues]: https://github.com/MightyPirates/OpenComputers/issues?state=open
-[jenkins]: http://ci.cil.li/
-[localizations]: https://github.com/MightyPirates/OpenComputers/tree/master-MC1.7.10/src/main/resources/assets/opencomputers/lang
-[loot]: https://github.com/MightyPirates/OpenComputers/tree/master-MC1.7.10/src/main/resources/assets/opencomputers/loot
-[manpages]: https://github.com/MightyPirates/OpenComputers/tree/master-MC1.7.10/src/main/resources/assets/opencomputers/loot/OpenOS/usr/man
-[manual]: https://github.com/MightyPirates/OpenComputers/tree/master-MC1.7.10/src/main/resources/assets/opencomputers/doc
-[mcf]: http://www.minecraftforum.net/topic/2201440-opencomputers-v122/
-[pack.mcmeta]: https://github.com/MightyPirates/OpenComputers/blob/master-MC1.7.10/src/main/resources/pack.mcmeta
-[releases]: https://github.com/MightyPirates/OpenComputers/releases
-[robot names]: https://github.com/MightyPirates/OpenComputers/blob/master-MC1.7.10/src/main/resources/assets/opencomputers/robot.names
-[wiki]: https://ocdoc.cil.li/
-[integration]: https://github.com/MightyPirates/OpenComputers/tree/master-MC1.7.10/src/main/scala/li/cil/oc/integration
-[ingame manual]: https://github.com/MightyPirates/OpenComputers/tree/master-MC1.7.10/src/main/resources/assets/opencomputers/doc
-[idea_1.7.10]: https://ocdoc.cil.li/tutorial:debug_1.7.10
+* Use Grammarly (not even premium - regular, pure, old Grammarly will do) when writing anything longer, like an MD file. We don't want any more [5yo typos](https://github.com/MightyPirates/OpenComputers/commit/f74d7d230eac640b080774b6bf8dc02b3cfde30c).
