@@ -1,4 +1,4 @@
-![Welcome to OpenComputers](assets/misc/banner.png)
+![Welcome to OpenComputers](assets/banner.png)
 
 # [OpenComputers](https://github.com/MightyPirates/OpenComputers) 2
 
