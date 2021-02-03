@@ -18,7 +18,7 @@ So - I [changed the license](https://github.com/GuzioMG/OpenComputers/commit/2c3
 
 That's right - there's indeed a little catch:
 
-* First of all, whatever enters the public domain - stays in the public domain forever. This is why original assets still belong to... every single human being, basically. That's said, all the alterations belong* to me under GPL2. So, if I adjust the hue of an individual pixel on top of a texture, everything around that pixel is still public domain, the previous version of the image is also PD, but that pixel is now GPL2. Or at least I think so - there is a significant chance I just accidentally committed license fraud, which is less than ideal. _*belong might not have been the best choice of words here, but nobody cares._
+* First of all, whatever enters the public domain - stays in the public domain forever. This is why original assets still belong to... every single human being, basically. That's said, all the alterations belong* to me under GPL2. So, if I adjust the hue of an individual pixel on top of a texture, everything around that pixel is still public domain, the previous version of the image is also PD, but that pixel is now GPL2. Or at least I think so - there is a significant chance I just accidentally committed license fraud, which is less than ideal. _*"belong" might not have been the best choice of words here, but nobody cares._
 
 * Second of all, I had to [nuke the source code and everything that's not an asset](https://github.com/GuzioMG/OpenComputers/commit/20ca1cbef24ef27c3b73fbc9202b4b6453e02431). Now in most cases of Fabric-ports, that should not be a problem. Here it is. That's because I skipped a few files. They were fixed in [the next commit](https://github.com/GuzioMG/OpenComputers/commit/3d2faf9a7c8d348ded065d36847e3c2712a59de9). But even then - I still skipped 3 files. Those files were `/LICENSE`, `/README.md` and `/.gitignore` because:
 
@@ -36,13 +36,15 @@ I hope that nobody will dispute over two entirely replaced files and one tiny, e
 
 * Project is licenced under GPL2, but some parts of assets might still be PD.
 
-* There is a slight chance I totally misunderstood the law, and this project might be an accidential license fraud.
+* There is a slight chance I totally misunderstood the law, and this project might be an accidental license fraud.
 
 * Original code [here](https://github.com/MightyPirates/OpenComputers).
 
-## My plans and some rules
+## My plans, status and some rules
 
-* I know it's very controversial, but I'm planning on changing the runtime from LUA to Python. The reason is simple - **OpenComputers LUA API is a HOT MESS AND DOCUMENTATION HELL** and I don't have a full lifetime to finish this port because I'd have to wiggle back-and-forth trying to figure out what does what.
+* **The project is temporarily suspended, as I'm currently in the process of deploying my home Nextcloud/Cloudron server, and that's taking up most of my time.**
+
+* I know it's very controversial, but I'm planning on changing the runtime from LUA to Python. The reason is simple - **OpenComputers LUA API is a HOT MESS AND DOCUMENTATION HELL**, and I don't have a full lifetime to finish this port because I'd have to wiggle back-and-forth trying to figure out what does what.
 
 * Use Krita for textures and keep the Krita file.
 
