@@ -22,7 +22,7 @@ That's right - there's indeed a little catch:
 
 * Second of all, I had to [nuke the source code and everything that's not an asset](https://github.com/GuzioMG/OpenComputers/commit/20ca1cbef24ef27c3b73fbc9202b4b6453e02431). Now in most cases of Fabric-ports, that should not be a problem. Here it is. That's because I skipped a few files. They were fixed in [the next commit](https://github.com/GuzioMG/OpenComputers/commit/3d2faf9a7c8d348ded065d36847e3c2712a59de9). But even then - I still skipped 3 files. Those files were `/LICENSE`, `/README.md` and `/.gitignore` because:
 
-> I was planning on fully replacing the first 2 ones.
+> I was planning on replacing the first 2 ones.
 
 > I just decided that the `.gitignore` is small and insignificant enough to just be... well... ignored (primarily because it looks exactly the same for 80% of Java projects).
 
@@ -41,8 +41,6 @@ I hope that nobody will dispute over two entirely replaced files and one tiny, e
 * Original code [here](https://github.com/MightyPirates/OpenComputers).
 
 ## My plans, status and some rules
-
-* **The project is temporarily suspended, as I'm currently in the process of deploying my home Nextcloud/Cloudron server, and that's taking up most of my time.**
 
 * I know it's very controversial, but I'm planning on changing the runtime from LUA to Python. The reason is simple - **OpenComputers LUA API is a HOT MESS AND DOCUMENTATION HELL**, and I don't have a full lifetime to finish this port because I'd have to wiggle back-and-forth trying to figure out what does what.
 
@@ -89,6 +87,8 @@ onClick{ //That's not a proper method definition, I know.
 ```
 
 * Advanced multi-screen, -keyboard, -GPU, etc. support.
+
+* I changed the ModID to oc2. I know some might consider it not the best decision - for example, because they're afraid about losing their files or resources (blocks and items with an old modid would disappear, after all). For those concerned about such a possibility occurring, I have a message: I can't imagine someone would be exporting their 1.12 Forge world to 1.16 Fabric. Jumping between major versions (e.g. 1.12 to 1.13) is already very rare in the modding world. Moving worlds across many major versions _while also_ **SWITCHING MODLOADERS** is pure insanity. But insanity is my second name. So I get you. However, there's one more thing: files. Remember how I said I'm going to move from Lua to Python? That basically means your PC would be rendered unbootable after you load up the world with OC2 installed. There's also a pretty significant chance your files would be unrecoverable, even when booted from a different, working, Python-based OS. But that does not solve the second problem, resources. Wouldn't it be nice to have a way to recover all those diamonds, gold, and PCBs put into your computer? Well... yes. But that's not my primary concern at the moment. In the future, if we get enough requests, maybe I'll make a mod that allows you to convert old OC blocks/items back into resources or new, fully compatible OC2 blocks/items. But just maybe.
 
 * Better (i.e. actually somewhat usable) sound.
 

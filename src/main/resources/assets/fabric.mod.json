@@ -1,37 +1,47 @@
 {
   "schemaVersion": 1,
-  "id": "modid",
+  "id": "oc2",
   "version": "${version}",
 
-  "name": "Example Mod",
-  "description": "This is an example description! Tell everyone what your mod is about!",
+  "name": "OpenComputers 2",
+  "description": "A Fabric port and a 1.12^ reboot of a well-known computer mod.",
   "authors": [
-    "Me!"
+    "Guzio (owner)", 
+    "MightyPirates (former dev group)", 
+    "Sangar/fnuecke (MightyPirates member; former owner & 1st top-contributor)", 
+    "payonel (MightyPirates member; former maintainer & 2nd top-contributor)", 
+    "Vexatos (former maintainer & 3rd top-contributor)", 
+    "lordjoda (MightyPirates member; former 4th top-contributor)", 
+    "magik6k (former 5th top-contributor)", 
+    "gamax92 (former 6th top-contributor) ", 
+    "cyber01 (former 7th top-contributor)", 
+    "PixelToast (former 8th top-contributor)", 
+    "rmellema (former 9th top-contributor)", 
+    "LizzyTrickster (former 10th top-contributor)", 
+    "isoadam (MightyPirates member)", 
+    "Kilobyte22 (MightyPirates member)", 
+    "team Fabric (without them, Fabric Loader wouldn't exist and this mod would have never been possible)"
   ],
   "contact": {
-    "homepage": "https://fabricmc.net/",
-    "sources": "https://github.com/FabricMC/fabric-example-mod"
+    "__homepage": "No homepage yet, sorry! When we'll have one, I'll uncomment the \"homepage\" tag by removing the \"__\" sign.",
+    "sources": "https://github.com/GuzioMG/OpenComputers-2"
   },
 
-  "license": "CC0-1.0",
+  "license": "GPL-2.0",
   "icon": "assets/modid/icon.png",
 
   "environment": "*",
   "entrypoints": {
     "main": [
-      "net.fabricmc.example.ExampleMod"
+      "hub.guzio.oc2.App"
     ]
   },
-  "mixins": [
-    "modid.mixins.json"
-  ],
+  "mixins": [],
 
   "depends": {
-    "fabricloader": ">=0.7.4",
+    "fabricloader": "*",
     "fabric": "*",
-    "minecraft": "1.16.x"
+    "minecraft": "*"
   },
-  "suggests": {
-    "another-mod": "*"
-  }
+  "suggests": {}
 }
