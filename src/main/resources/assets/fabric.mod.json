@@ -39,9 +39,9 @@
   "mixins": [],
 
   "depends": {
-    "fabricloader": "*",
+    "fabricloader": ">=0.7.4",
     "fabric": "*",
-    "minecraft": "*"
+    "minecraft": "1.16.x"
   },
   "suggests": {}
 }

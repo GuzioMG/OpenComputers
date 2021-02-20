@@ -8,16 +8,4 @@ public class App implements Mod{
 	public void onInitialize() {
 		System.out.println("Hello form Opencomputers 2 common side!");
 	}
-
-	@Override
-	public void onInitializeClient() {
-		System.out.println("Hello form Opencomputers 2 client side!");
-		
-	}
-
-	@Override
-	public void onInitializeServer() {
-		System.out.println("Hello form Opencomputers 2 server side!");
-		
-	}
 }
